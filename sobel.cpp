@@ -58,8 +58,8 @@ int main( int argc, char** argv )
 
   imshow( window_name, grad );
 
-  std::cout << "x type: " << getImgType(grad_x.type()) << "\t" << CV_16S << "\n";
-  std::cout << CV_32F << "\t" << CV_64F << "\n";
+  
+  
 
   cv::Mat grad_x_f, grad_y_f;
   grad_x.convertTo(grad_x_f,CV_32F);
@@ -73,23 +73,44 @@ int main( int argc, char** argv )
   imshow("better gradient magnitude",mag);
 
   cv::Mat mag_bin;
-  cv:threshold(mag,mag_bin,128,256,THRESH_BINARY);
+  cv:threshold(mag,mag_bin,128,255,THRESH_BINARY);
   imshow("bin better gradient magnitude",mag_bin);
+
+  std::cout << "type: " << getImgType(mag_bin.type()) << "\n";
 
   cv::Mat ph;
   cv::phase(grad_x_f,grad_y_f,ph,true);
 
+  cv::Mat myphase;
+  cv::phase(grad_x_f,grad_y_f,myphase,false);
+
   cv::convertScaleAbs(ph,ph);
   imshow("phase",ph);  
 
+
+
   cv::Mat ph_interesting;
   cv::bitwise_and(ph,mag_bin,ph_interesting);
+
+  cvtColor( ph_interesting, ph_interesting, CV_GRAY2RGB );
+
+  for ( int x = 0; x < ph_interesting.cols; x+=10 ){
+    for ( int y = 0; y < ph_interesting.rows; y+=10 ){
+      if(mag_bin.at<unsigned char>(y,x)==255){
+        float angle = myphase.at<float>(y,x);
+        cv::Point tip(x+10*cos(angle),y-10*sin(angle));
+        cv::line(ph_interesting,cv::Point(x,y),tip,CV_RGB(255,0,0));
+        cv::circle(ph_interesting,tip,2,CV_RGB(255,0,0));
+      }
+    }
+  }
+
   imshow("interesting phase",ph_interesting);
 
   cv::convertScaleAbs(grad_x,grad_x);
   cv::convertScaleAbs(grad_y,grad_y);
-  imshow("x",grad_x);
-  imshow("y",grad_y);
+  //imshow("x",grad_x);
+  //imshow("y",grad_y);
 
   waitKey(0);
 
