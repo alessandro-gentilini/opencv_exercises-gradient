@@ -7,17 +7,28 @@
 
 #include <iostream>
 #include <map>
+#include <unordered_map>
 
 using namespace cv;
 
-void draw_cross(cv::Mat& img, const cv::Point center, float arm_length )
+void draw_cross(cv::Mat& img, const cv::Point center, float arm_length, const Scalar& color )
 {
   cv::Point N(center-cv::Point(0,arm_length));
   cv::Point S(center+cv::Point(0,arm_length));
   cv::Point E(center+cv::Point(arm_length,0));
   cv::Point W(center-cv::Point(arm_length,0));  
-  cv::line(img,N,S,CV_RGB(255,255,0));
-  cv::line(img,E,W,CV_RGB(255,255,0));
+  cv::line(img,N,S,color);
+  cv::line(img,E,W,color);
+}
+
+void draw_cross_45(cv::Mat& img, const cv::Point center, float arm_length, const Scalar& color )
+{
+  cv::Point NE(center+cv::Point(arm_length,arm_length));
+  cv::Point SW(center+cv::Point(-arm_length,-arm_length));
+  cv::Point SE(center+cv::Point(arm_length,-arm_length));
+  cv::Point NW(center+cv::Point(-arm_length,arm_length));  
+  cv::line(img,NE,SW,color);
+  cv::line(img,SE,NW,color);
 }
 
 template< typename T >
@@ -25,6 +36,15 @@ T rad2deg( const T& r )
 {
   return 180*r/M_PI;
 }
+
+struct hash_point {
+    size_t operator()(const cv::Point& p ) const
+    {
+        std::ostringstream oss;
+        oss << p;
+        return std::hash<std::string>()(oss.str());
+    }
+};
 
 int main( int argc, char** argv )
 {
@@ -39,6 +59,8 @@ int main( int argc, char** argv )
 
   /// Load an image
   model = imread( argv[1] );
+
+  imshow("model",model);
 
   if( !model.data )
     { return -1; }
@@ -104,8 +126,8 @@ int main( int argc, char** argv )
   std::vector< cv::Point > mymask;
 
   cv::Point centroid(0,0);
-  for ( int x = 0; x < phi_on_edge.cols; x+=15 ){
-    for ( int y = 0; y < phi_on_edge.rows; y+=15 ){
+  for ( int x = 0; x < phi_on_edge.cols; x+=1 ){//15
+    for ( int y = 0; y < phi_on_edge.rows; y+=1 ){
       if(mag_bin.at<unsigned char>(y,x)==255){
         cv::Point p(x,y);
         mymask.push_back(p);
@@ -127,8 +149,10 @@ int main( int argc, char** argv )
 
   for ( size_t i = 0; i < mymask.size(); i++ ){
     float angle = rad2deg(phi_radian.at<float>(mymask[i].y,mymask[i].x));
-    cv::line(phi_on_edge,centroid,mymask[i],CV_RGB(255,0,255));
-    R_table.insert(std::make_pair(angle,centroid-mymask[i]));
+    if ( i%200 == 0 ) {
+      cv::line(phi_on_edge,centroid,mymask[i],CV_RGB(0,255,255));
+    }
+    R_table.insert(std::make_pair(static_cast<int>(angle),centroid-mymask[i]));
   }
 
   std::cout << "\nR table:\n";
@@ -140,23 +164,28 @@ int main( int argc, char** argv )
     }
   }
 
-  for ( size_t i = 0; i < mymask.size(); i++ ) {
-    float angle = phi_radian.at<float>(mymask[i].y,mymask[i].x);
-    float arm_length = 50;
-    cv::Point tip(mymask[i].x+arm_length*cos(angle),mymask[i].y+arm_length*sin(angle));
-    cv::line(phi_on_edge,mymask[i],tip,CV_RGB(255,0,0));
-    cv::circle(phi_on_edge,tip,2,CV_RGB(0,255,0));    
-    std::ostringstream oss;
-    oss << i;
-    cv::putText(phi_on_edge,oss.str(),tip,FONT_HERSHEY_SIMPLEX,1,CV_RGB(255,0,0));
+  for ( size_t i = 0; i < mymask.size(); i+=1 ) {
+    if ( i%200==0 ) {
+      float angle = phi_radian.at<float>(mymask[i].y,mymask[i].x);
+      float arm_length = 50;
+      cv::Point tip(mymask[i].x+arm_length*cos(angle),mymask[i].y+arm_length*sin(angle));
+      cv::line(phi_on_edge,mymask[i],tip,CV_RGB(255,0,0));
+      cv::circle(phi_on_edge,tip,2,CV_RGB(0,255,0));    
+      std::ostringstream oss;
+      oss << i;
+      cv::putText(phi_on_edge,oss.str(),tip,FONT_HERSHEY_SIMPLEX,1,CV_RGB(255,0,0));
+    }
   }
   cv::circle(phi_on_edge,centroid,2,CV_RGB(255,255,0)); 
-  draw_cross(phi_on_edge,centroid,100);
+  draw_cross(phi_on_edge,centroid,100,CV_RGB(0,0,255));
 
-  
+  size_t idx = 0;
   for ( R_table_t::const_iterator it = R_table.begin(); it != R_table.end(); ++it ) {
-    cv::line(phi_on_edge,centroid-it->second,centroid,CV_RGB(0,255,255));
+    if ( (idx++)%200==0 ) {
+      //cv::line(phi_on_edge,centroid-it->second,centroid,CV_RGB(255,0,255));
+    }
   }
+  
   
 
 
@@ -206,7 +235,7 @@ int main( int argc, char** argv )
 
   cv::Mat scene_mag_bin;
   cv::threshold(scene_mag,scene_mag_bin,128,255,THRESH_BINARY);
-  imshow("binarized L2 gradient magnitude",scene_mag_bin);
+  imshow("scene binarized L2 gradient magnitude",scene_mag_bin);
 
   cv::Mat scene_phi_degree;
   cv::phase(scene_grad_x_f,scene_grad_y_f,scene_phi_degree,true);
@@ -223,8 +252,8 @@ int main( int argc, char** argv )
   cvtColor( scene_phi_on_edge, scene_phi_on_edge, CV_GRAY2RGB );
 
   std::vector< cv::Point > scene_mymask;
-  for ( int x = 0; x < scene_phi_on_edge.cols; x+=15 ){
-    for ( int y = 0; y < scene_phi_on_edge.rows; y+=15 ){
+  for ( int x = 0; x < scene_phi_on_edge.cols; x+=1 ){
+    for ( int y = 0; y < scene_phi_on_edge.rows; y+=1 ){
       if(scene_mag_bin.at<unsigned char>(y,x)==255){
         cv::Point p(x,y);
         scene_mymask.push_back(p);
@@ -232,17 +261,57 @@ int main( int argc, char** argv )
     }
   }
 
+  cv::Point location;
+  int cnt = 0;
+  std::unordered_map<cv::Point,int,hash_point> votes;
+  
+
+  cv::Mat accumulator = cv::Mat::zeros(scene_gray.rows,scene_gray.cols,cv::DataType<int>::type);
   std::cout << "\nSearch:\n";
   for ( size_t i = 0; i < scene_mymask.size(); i++ ) {
     float angle = rad2deg(scene_phi_radian.at<float>(scene_mymask[i].y,scene_mymask[i].x));
-    std::pair <R_table_t::iterator, R_table_t::iterator> ret(R_table.equal_range(angle));
+    std::pair <R_table_t::iterator, R_table_t::iterator> ret(R_table.equal_range(static_cast<int>(angle)));
     if (ret.first != ret.second){
       std::cout << angle << "\n";
       for (R_table_t::iterator it1=ret.first; it1!=ret.second; ++it1){
         std::cout << "\t" << it1->second << "\n";
+        cv::Point candidate = it1->second + scene_mymask[i];
+        if (candidate.y<accumulator.rows && candidate.x<accumulator.cols) {
+          accumulator.at<int>(candidate.y,candidate.x)++;
+        }
+        //draw_cross(scene,scene_mymask[i],3);
+        //cv::line(scene,scene_mymask[i],candidate,CV_RGB(0,0,255));
+        
+        if ( votes.count(candidate) ) {
+          votes[candidate]++;
+        } else {
+          votes.insert(std::make_pair(candidate,1));
+        }
+        if ( votes[candidate] > cnt ){
+          location = candidate;
+          cnt = votes[candidate];
+        }
+        
       }    
     }
   }
+
+  double a_min,a_max;
+  cv::Point p_min,p_max;
+  cv::minMaxLoc(accumulator,&a_min,&a_max,&p_min,&p_max);
+  std::cerr << "min=" << a_min << " @ " << p_min << "\n";
+  std::cerr << "max=" << a_max << " @ " << p_max << "\n";
+  std::cerr << "cnt=" << cnt << " @ " << location << "\n";
+
+  cv::Mat acc_to_show;
+  convertScaleAbs( accumulator, acc_to_show );
+  imshow("accumulator",acc_to_show);
+
+  
+  
+  draw_cross(scene,location,100,CV_RGB(0,0,255));
+  draw_cross_45(scene,p_max,100,CV_RGB(255,0,0));
+  imshow("Found",scene);
 
 
 
