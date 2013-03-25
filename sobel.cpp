@@ -1,188 +1,6 @@
 // Alessandro Gentilini
 
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include <stdlib.h>
-#include <stdio.h>
-
-#include <iostream>
-#include <map>
-#include <unordered_map>
-
-void draw_cross(cv::Mat& img, const cv::Point center, float arm_length, const cv::Scalar& color )
-{
-  cv::Point N(center-cv::Point(0,arm_length));
-  cv::Point S(center+cv::Point(0,arm_length));
-  cv::Point E(center+cv::Point(arm_length,0));
-  cv::Point W(center-cv::Point(arm_length,0));  
-  cv::line(img,N,S,color);
-  cv::line(img,E,W,color);
-}
-
-void draw_cross_45(cv::Mat& img, const cv::Point center, float arm_length, const cv::Scalar& color )
-{
-  cv::Point NE(center+cv::Point(arm_length,arm_length));
-  cv::Point SW(center+cv::Point(-arm_length,-arm_length));
-  cv::Point SE(center+cv::Point(arm_length,-arm_length));
-  cv::Point NW(center+cv::Point(-arm_length,arm_length));  
-  cv::line(img,NE,SW,color);
-  cv::line(img,SE,NW,color);
-}
-
-template< typename T >
-T rad2deg( const T& r )
-{
-  return 180*r/M_PI;
-}
-
-struct hash_point {
-    size_t operator()(const cv::Point& p ) const
-    {
-        return std::hash<cv::Point::value_type>()(p.x)^std::hash<cv::Point::value_type>()(p.y);
-    }
-};
-
-void gradient_L1_norm(const cv::Mat& img, cv::Mat& norm)
-{
-  int scale = 1;
-  int delta = 0;
-  int ddepth = CV_16S;
-
-  cv::Mat gray;
-  cv::cvtColor( img, gray, CV_RGB2GRAY );
-  
-  /// Generate grad_x and grad_y
-  cv::Mat grad_x, grad_y;
-  cv::Mat abs_grad_x, abs_grad_y;
-
-  /// Gradient X
-  //Scharr( model_gray, grad_x, ddepth, 1, 0, scale, delta, cv::BORDER_DEFAULT );
-  cv::Sobel( gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
-  cv::convertScaleAbs( grad_x, abs_grad_x );
-
-  /// Gradient Y
-  //Scharr( model_gray, grad_y, ddepth, 0, 1, scale, delta, cv::BORDER_DEFAULT );
-  cv::Sobel( gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
-  cv::convertScaleAbs( grad_y, abs_grad_y );
-
-  /// Total Gradient (approximate)
-  addWeighted( abs_grad_x, 1, abs_grad_y, 1, 0, norm );
-}
-
-void gradient_L2_norm(const cv::Mat& img, cv::Mat& norm)
-{
-  int scale = 1;
-  int delta = 0;
-  int ddepth = CV_16S;
-
-  cv::Mat gray;
-  cv::cvtColor( img, gray, CV_RGB2GRAY );
-  
-  /// Generate grad_x and grad_y
-  cv::Mat grad_x, grad_y;
-
-  /// Gradient X
-  //Scharr( model_gray, grad_x, ddepth, 1, 0, scale, delta, cv::BORDER_DEFAULT );
-  cv::Sobel( gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
-
-  /// Gradient Y
-  //Scharr( model_gray, grad_y, ddepth, 0, 1, scale, delta, cv::BORDER_DEFAULT );
-  cv::Sobel( gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
-
-  cv::Mat grad_x_f, grad_y_f;
-  grad_x.convertTo(grad_x_f,CV_32F);
-  grad_y.convertTo(grad_y_f,CV_32F);
-
-  cv::magnitude(grad_x_f,grad_y_f,norm);
-}
-
-void gradient_phase(const cv::Mat& img, cv::Mat& phase, bool is_degree )
-{
-  int scale = 1;
-  int delta = 0;
-  int ddepth = CV_16S;
-
-  cv::Mat gray;
-  cv::cvtColor( img, gray, CV_RGB2GRAY );
-  
-  /// Generate grad_x and grad_y
-  cv::Mat grad_x, grad_y;
-
-  /// Gradient X
-  //Scharr( model_gray, grad_x, ddepth, 1, 0, scale, delta, cv::BORDER_DEFAULT );
-  cv::Sobel( gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
-
-  /// Gradient Y
-  //Scharr( model_gray, grad_y, ddepth, 0, 1, scale, delta, cv::BORDER_DEFAULT );
-  cv::Sobel( gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
-
-  cv::Mat grad_x_f, grad_y_f;
-  grad_x.convertTo(grad_x_f,CV_32F);
-  grad_y.convertTo(grad_y_f,CV_32F);
-
-  cv::phase(grad_x_f,grad_y_f,phase,is_degree);
-}
-
-typedef std::multimap<int,cv::Point> R_table_t;
-
-void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& mask)
-{
-  cv::Mat mag_bin;
-  cv:threshold(gradient_norm,mag_bin,128,255,cv::THRESH_BINARY);
-
-  std::vector< cv::Point > mymask;
-  centroid = cv::Point(0,0);
-  for ( int x = 0; x < mag_bin.cols; x+=1 ){//15
-    for ( int y = 0; y < mag_bin.rows; y+=1 ){
-      if(mag_bin.at<unsigned char>(y,x)==255){
-        cv::Point p(x,y);
-        mymask.push_back(p);
-        centroid += p;
-      }
-    }
-  }
-  centroid.x /= mymask.size();
-  centroid.y /= mymask.size();  
-
-  for ( size_t i = 0; i < mymask.size(); i++ ){
-    float angle = rad2deg(gradient_phase_radians.at<float>(mymask[i].y,mymask[i].x));
-    rt.insert(std::make_pair(static_cast<int>(angle),centroid-mymask[i]));
-  }
-
-  mask = mymask;
-}
-
-void draw_R_table_sample(cv::Mat& img, const cv::Mat& gradient_phase_radians, const std::vector<cv::Point>& mask, size_t period, const cv::Point& centroid)
-{
-  for ( size_t i = 0; i < mask.size(); i++ ) {
-    if ( i%period==0 ) {
-      float angle = gradient_phase_radians.at<float>(mask[i].y,mask[i].x);
-      float arm_length = 50;
-      cv::Point tip(mask[i].x+arm_length*cos(angle),mask[i].y+arm_length*sin(angle));
-      cv::line(img,mask[i],tip,CV_RGB(255,0,0));
-      cv::circle(img,tip,2,CV_RGB(0,255,0));    
-      std::ostringstream oss;
-      oss << i;
-      cv::putText(img,oss.str(),tip,cv::FONT_HERSHEY_SIMPLEX,1,CV_RGB(255,0,0));
-      cv::line(img,centroid,mask[i],CV_RGB(0,255,255));
-    }
-  }
-  cv::circle(img,centroid,2,CV_RGB(255,255,0)); 
-  draw_cross(img,centroid,100,CV_RGB(0,0,255));
-}
-
-std::string R_table_to_string(const R_table_t& rt)
-{
-  std::ostringstream oss;
-  for ( auto it = rt.begin(); it != rt.end(); ++it ) {
-    auto ret(rt.equal_range(it->first));
-    oss << it->first << "\n";
-    for ( auto it1=ret.first; it1!=ret.second; ++it1 ){
-      oss << "\t" << it1->second << "\n";
-    }
-  }
-  return oss.str();
-}
+#include "sobel.h"
 
 int main( int argc, char** argv )
 {
@@ -350,5 +168,167 @@ int main( int argc, char** argv )
   cv::waitKey(0);
 
   return 0;
+}
+
+void draw_cross(cv::Mat& img, const cv::Point center, float arm_length, const cv::Scalar& color )
+{
+  cv::Point N(center-cv::Point(0,arm_length));
+  cv::Point S(center+cv::Point(0,arm_length));
+  cv::Point E(center+cv::Point(arm_length,0));
+  cv::Point W(center-cv::Point(arm_length,0));  
+  cv::line(img,N,S,color);
+  cv::line(img,E,W,color);
+}
+
+void draw_cross_45(cv::Mat& img, const cv::Point center, float arm_length, const cv::Scalar& color )
+{
+  cv::Point NE(center+cv::Point(arm_length,arm_length));
+  cv::Point SW(center+cv::Point(-arm_length,-arm_length));
+  cv::Point SE(center+cv::Point(arm_length,-arm_length));
+  cv::Point NW(center+cv::Point(-arm_length,arm_length));  
+  cv::line(img,NE,SW,color);
+  cv::line(img,SE,NW,color);
+}
+
+void gradient_L1_norm(const cv::Mat& img, cv::Mat& norm)
+{
+  int scale = 1;
+  int delta = 0;
+  int ddepth = CV_16S;
+
+  cv::Mat gray;
+  cv::cvtColor( img, gray, CV_RGB2GRAY );
+  
+  /// Generate grad_x and grad_y
+  cv::Mat grad_x, grad_y;
+  cv::Mat abs_grad_x, abs_grad_y;
+
+  /// Gradient X
+  //Scharr( model_gray, grad_x, ddepth, 1, 0, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
+  cv::convertScaleAbs( grad_x, abs_grad_x );
+
+  /// Gradient Y
+  //Scharr( model_gray, grad_y, ddepth, 0, 1, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
+  cv::convertScaleAbs( grad_y, abs_grad_y );
+
+  /// Total Gradient (approximate)
+  addWeighted( abs_grad_x, 1, abs_grad_y, 1, 0, norm );
+}
+
+void gradient_L2_norm(const cv::Mat& img, cv::Mat& norm)
+{
+  int scale = 1;
+  int delta = 0;
+  int ddepth = CV_16S;
+
+  cv::Mat gray;
+  cv::cvtColor( img, gray, CV_RGB2GRAY );
+  
+  /// Generate grad_x and grad_y
+  cv::Mat grad_x, grad_y;
+
+  /// Gradient X
+  //Scharr( model_gray, grad_x, ddepth, 1, 0, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
+
+  /// Gradient Y
+  //Scharr( model_gray, grad_y, ddepth, 0, 1, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
+
+  cv::Mat grad_x_f, grad_y_f;
+  grad_x.convertTo(grad_x_f,CV_32F);
+  grad_y.convertTo(grad_y_f,CV_32F);
+
+  cv::magnitude(grad_x_f,grad_y_f,norm);
+}
+
+void gradient_phase(const cv::Mat& img, cv::Mat& phase, bool is_degree )
+{
+  int scale = 1;
+  int delta = 0;
+  int ddepth = CV_16S;
+
+  cv::Mat gray;
+  cv::cvtColor( img, gray, CV_RGB2GRAY );
+  
+  /// Generate grad_x and grad_y
+  cv::Mat grad_x, grad_y;
+
+  /// Gradient X
+  //Scharr( model_gray, grad_x, ddepth, 1, 0, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
+
+  /// Gradient Y
+  //Scharr( model_gray, grad_y, ddepth, 0, 1, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
+
+  cv::Mat grad_x_f, grad_y_f;
+  grad_x.convertTo(grad_x_f,CV_32F);
+  grad_y.convertTo(grad_y_f,CV_32F);
+
+  cv::phase(grad_x_f,grad_y_f,phase,is_degree);
+}
+
+typedef std::multimap<int,cv::Point> R_table_t;
+
+void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& mask)
+{
+  cv::Mat mag_bin;
+  cv:threshold(gradient_norm,mag_bin,128,255,cv::THRESH_BINARY);
+
+  std::vector< cv::Point > mymask;
+  centroid = cv::Point(0,0);
+  for ( int x = 0; x < mag_bin.cols; x+=1 ){//15
+    for ( int y = 0; y < mag_bin.rows; y+=1 ){
+      if(mag_bin.at<unsigned char>(y,x)==255){
+        cv::Point p(x,y);
+        mymask.push_back(p);
+        centroid += p;
+      }
+    }
+  }
+  centroid.x /= mymask.size();
+  centroid.y /= mymask.size();  
+
+  for ( size_t i = 0; i < mymask.size(); i++ ){
+    float angle = rad2deg(gradient_phase_radians.at<float>(mymask[i].y,mymask[i].x));
+    rt.insert(std::make_pair(static_cast<int>(angle),centroid-mymask[i]));
+  }
+
+  mask = mymask;
+}
+
+void draw_R_table_sample(cv::Mat& img, const cv::Mat& gradient_phase_radians, const std::vector<cv::Point>& mask, size_t period, const cv::Point& centroid)
+{
+  for ( size_t i = 0; i < mask.size(); i++ ) {
+    if ( i%period==0 ) {
+      float angle = gradient_phase_radians.at<float>(mask[i].y,mask[i].x);
+      float arm_length = 50;
+      cv::Point tip(mask[i].x+arm_length*cos(angle),mask[i].y+arm_length*sin(angle));
+      cv::line(img,mask[i],tip,CV_RGB(255,0,0));
+      cv::circle(img,tip,2,CV_RGB(0,255,0));    
+      std::ostringstream oss;
+      oss << i;
+      cv::putText(img,oss.str(),tip,cv::FONT_HERSHEY_SIMPLEX,1,CV_RGB(255,0,0));
+      cv::line(img,centroid,mask[i],CV_RGB(0,255,255));
+    }
+  }
+  cv::circle(img,centroid,2,CV_RGB(255,255,0)); 
+  draw_cross(img,centroid,100,CV_RGB(0,0,255));
+}
+
+std::string R_table_to_string(const R_table_t& rt)
+{
+  std::ostringstream oss;
+  for ( auto it = rt.begin(); it != rt.end(); ++it ) {
+    auto ret(rt.equal_range(it->first));
+    oss << it->first << "\n";
+    for ( auto it1=ret.first; it1!=ret.second; ++it1 ){
+      oss << "\t" << it1->second << "\n";
+    }
+  }
+  return oss.str();
 }
 
