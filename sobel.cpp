@@ -42,30 +42,14 @@ struct hash_point {
     }
 };
 
-int main( int argc, char** argv )
+void gradient_L1_norm(const cv::Mat& img, cv::Mat& norm)
 {
-
-  cv::Mat model, model_gray;
-  cv::Mat L1_gradient_magnitude;
   int scale = 1;
   int delta = 0;
   int ddepth = CV_16S;
 
-  int c;
-
-  /// Load an image
-  model = cv::imread( argv[1] );
-
-  cv::imshow("model",model);
-
-  if( !model.data )
-    { return -1; }
-
-  //GaussianBlur( model, model, Size(3,3), 0, 0, cv::BORDER_DEFAULT );
-
-  /// Convert it to gray
-  cv::cvtColor( model, model_gray, CV_RGB2GRAY );
-
+  cv::Mat gray;
+  cv::cvtColor( img, gray, CV_RGB2GRAY );
   
   /// Generate grad_x and grad_y
   cv::Mat grad_x, grad_y;
@@ -73,57 +57,83 @@ int main( int argc, char** argv )
 
   /// Gradient X
   //Scharr( model_gray, grad_x, ddepth, 1, 0, scale, delta, cv::BORDER_DEFAULT );
-  Sobel( model_gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
   cv::convertScaleAbs( grad_x, abs_grad_x );
 
   /// Gradient Y
   //Scharr( model_gray, grad_y, ddepth, 0, 1, scale, delta, cv::BORDER_DEFAULT );
-  Sobel( model_gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
   cv::convertScaleAbs( grad_y, abs_grad_y );
 
   /// Total Gradient (approximate)
-  addWeighted( abs_grad_x, 1, abs_grad_y, 1, 0, L1_gradient_magnitude );
+  addWeighted( abs_grad_x, 1, abs_grad_y, 1, 0, norm );
+}
 
+void gradient_L2_norm(const cv::Mat& img, cv::Mat& norm)
+{
+  int scale = 1;
+  int delta = 0;
+  int ddepth = CV_16S;
 
-  cv::imshow( "L1 gradient magnitude", L1_gradient_magnitude );
-
+  cv::Mat gray;
+  cv::cvtColor( img, gray, CV_RGB2GRAY );
   
-  
+  /// Generate grad_x and grad_y
+  cv::Mat grad_x, grad_y;
+
+  /// Gradient X
+  //Scharr( model_gray, grad_x, ddepth, 1, 0, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
+
+  /// Gradient Y
+  //Scharr( model_gray, grad_y, ddepth, 0, 1, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
 
   cv::Mat grad_x_f, grad_y_f;
   grad_x.convertTo(grad_x_f,CV_32F);
   grad_y.convertTo(grad_y_f,CV_32F);
 
+  cv::magnitude(grad_x_f,grad_y_f,norm);
+}
 
-  cv::Mat mag;
-  cv::magnitude(grad_x_f,grad_y_f,mag);
+void gradient_phase(const cv::Mat& img, cv::Mat& phase, bool is_degree )
+{
+  int scale = 1;
+  int delta = 0;
+  int ddepth = CV_16S;
 
-  cv::convertScaleAbs(mag,mag);
-  cv::imshow("L2 gradient magnitude",mag);
+  cv::Mat gray;
+  cv::cvtColor( img, gray, CV_RGB2GRAY );
+  
+  /// Generate grad_x and grad_y
+  cv::Mat grad_x, grad_y;
 
+  /// Gradient X
+  //Scharr( model_gray, grad_x, ddepth, 1, 0, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
+
+  /// Gradient Y
+  //Scharr( model_gray, grad_y, ddepth, 0, 1, scale, delta, cv::BORDER_DEFAULT );
+  cv::Sobel( gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
+
+  cv::Mat grad_x_f, grad_y_f;
+  grad_x.convertTo(grad_x_f,CV_32F);
+  grad_y.convertTo(grad_y_f,CV_32F);
+
+  cv::phase(grad_x_f,grad_y_f,phase,is_degree);
+}
+
+typedef std::multimap<int,cv::Point> R_table_t;
+
+void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& mask)
+{
   cv::Mat mag_bin;
-  cv:threshold(mag,mag_bin,128,255,cv::THRESH_BINARY);
-  cv::imshow("binarized L2 gradient magnitude",mag_bin);
-
-  cv::Mat phi_degree;
-  cv::phase(grad_x_f,grad_y_f,phi_degree,true);
-
-  cv::Mat phi_radian;
-  cv::phase(grad_x_f,grad_y_f,phi_radian,false);
-
-  cv::convertScaleAbs(phi_degree,phi_degree);
-  cv::imshow("phase [degree]",phi_degree);  
-
-  cv::Mat phi_on_edge;
-  cv::bitwise_and(phi_degree,mag_bin,phi_on_edge);
-
-  cvtColor( phi_on_edge, phi_on_edge, CV_GRAY2RGB );
+  cv:threshold(gradient_norm,mag_bin,128,255,cv::THRESH_BINARY);
 
   std::vector< cv::Point > mymask;
-
-  cv::Point centroid(0,0);
-  for ( int x = 0; x < phi_on_edge.cols; x+=1 ){//15
-    for ( int y = 0; y < phi_on_edge.rows; y+=1 ){
+  centroid = cv::Point(0,0);
+  for ( int x = 0; x < mag_bin.cols; x+=1 ){//15
+    for ( int y = 0; y < mag_bin.rows; y+=1 ){
       if(mag_bin.at<unsigned char>(y,x)==255){
         cv::Point p(x,y);
         mymask.push_back(p);
@@ -132,48 +142,104 @@ int main( int argc, char** argv )
     }
   }
   centroid.x /= mymask.size();
-  centroid.y /= mymask.size();
-
-  std::cout << "\nPoint on boundary index,angles in degree (clock wise)\n";
-  for ( size_t i = 0; i < mymask.size(); i++ ){
-    float angle = rad2deg(phi_radian.at<float>(mymask[i].y,mymask[i].x));
-    std::cout << i << "\t,\t" << angle << "\n";
-  }  
-
-  typedef std::multimap<int,cv::Point> R_table_t;
-  R_table_t R_table;
+  centroid.y /= mymask.size();  
 
   for ( size_t i = 0; i < mymask.size(); i++ ){
-    float angle = rad2deg(phi_radian.at<float>(mymask[i].y,mymask[i].x));
-    if ( i%200 == 0 ) {
-      cv::line(phi_on_edge,centroid,mymask[i],CV_RGB(0,255,255));
-    }
-    R_table.insert(std::make_pair(static_cast<int>(angle),centroid-mymask[i]));
+    float angle = rad2deg(gradient_phase_radians.at<float>(mymask[i].y,mymask[i].x));
+    rt.insert(std::make_pair(static_cast<int>(angle),centroid-mymask[i]));
   }
 
-  std::cout << "\nR table:\n";
-  for ( R_table_t::const_iterator it = R_table.begin(); it != R_table.end(); ++it ) {
-    std::pair <R_table_t::iterator, R_table_t::iterator> ret(R_table.equal_range(it->first));
-    std::cout << it->first << "\n";
-    for (R_table_t::iterator it1=ret.first; it1!=ret.second; ++it1){
-      std::cout << "\t" << it1->second << "\n";
-    }
-  }
+  mask = mymask;
+}
 
-  for ( size_t i = 0; i < mymask.size(); i+=1 ) {
-    if ( i%200==0 ) {
-      float angle = phi_radian.at<float>(mymask[i].y,mymask[i].x);
+void draw_R_table_sample(cv::Mat& img, const cv::Mat& gradient_phase_radians, const std::vector<cv::Point>& mask, size_t period, const cv::Point& centroid)
+{
+  for ( size_t i = 0; i < mask.size(); i++ ) {
+    if ( i%period==0 ) {
+      float angle = gradient_phase_radians.at<float>(mask[i].y,mask[i].x);
       float arm_length = 50;
-      cv::Point tip(mymask[i].x+arm_length*cos(angle),mymask[i].y+arm_length*sin(angle));
-      cv::line(phi_on_edge,mymask[i],tip,CV_RGB(255,0,0));
-      cv::circle(phi_on_edge,tip,2,CV_RGB(0,255,0));    
+      cv::Point tip(mask[i].x+arm_length*cos(angle),mask[i].y+arm_length*sin(angle));
+      cv::line(img,mask[i],tip,CV_RGB(255,0,0));
+      cv::circle(img,tip,2,CV_RGB(0,255,0));    
       std::ostringstream oss;
       oss << i;
-      cv::putText(phi_on_edge,oss.str(),tip,cv::FONT_HERSHEY_SIMPLEX,1,CV_RGB(255,0,0));
+      cv::putText(img,oss.str(),tip,cv::FONT_HERSHEY_SIMPLEX,1,CV_RGB(255,0,0));
+      cv::line(img,centroid,mask[i],CV_RGB(0,255,255));
     }
   }
-  cv::circle(phi_on_edge,centroid,2,CV_RGB(255,255,0)); 
-  draw_cross(phi_on_edge,centroid,100,CV_RGB(0,0,255));
+  cv::circle(img,centroid,2,CV_RGB(255,255,0)); 
+  draw_cross(img,centroid,100,CV_RGB(0,0,255));
+}
+
+std::string R_table_to_string(const R_table_t& rt)
+{
+  std::ostringstream oss;
+  for ( auto it = rt.begin(); it != rt.end(); ++it ) {
+    auto ret(rt.equal_range(it->first));
+    oss << it->first << "\n";
+    for ( auto it1=ret.first; it1!=ret.second; ++it1 ){
+      oss << "\t" << it1->second << "\n";
+    }
+  }
+  return oss.str();
+}
+
+int main( int argc, char** argv )
+{
+  cv::Mat model,model_gray;
+  int c;
+
+  /// Load an image
+  model = cv::imread( argv[1] );
+  cv::cvtColor( model, model_gray, CV_RGB2GRAY );
+
+  cv::imshow("model",model);
+
+  if( !model.data )
+    { return -1; }
+
+  //GaussianBlur( model, model, Size(3,3), 0, 0, cv::BORDER_DEFAULT );
+
+  cv::Mat L1_gradient_magnitude;
+  gradient_L1_norm(model,L1_gradient_magnitude);
+  cv::imshow( "L1 gradient magnitude", L1_gradient_magnitude );
+
+  cv::Mat L2_gradient_magnitude;
+  gradient_L2_norm(model,L2_gradient_magnitude);
+  cv::convertScaleAbs(L2_gradient_magnitude,L2_gradient_magnitude);
+  cv::imshow("L2 gradient magnitude",L2_gradient_magnitude);
+
+  cv::Mat mag_bin;
+  cv:threshold(L2_gradient_magnitude,mag_bin,128,255,cv::THRESH_BINARY);
+  cv::imshow("binarized L2 gradient magnitude",mag_bin);
+
+  cv::Mat phi_degree;
+  gradient_phase(model,phi_degree,true);
+
+  cv::Mat phi_radian;
+  gradient_phase(model,phi_radian,false);
+
+  cv::convertScaleAbs(phi_degree,phi_degree);
+  cv::imshow("phase [degree]",phi_degree);  
+
+  R_table_t R_table;
+  cv::Point centroid;
+  std::vector< cv::Point > mymask;
+  compute_R_table(L2_gradient_magnitude,phi_radian,R_table,centroid,mymask);
+
+  cv::Mat phi_on_edge;
+  cv::bitwise_and(phi_degree,mag_bin,phi_on_edge);
+  cvtColor( phi_on_edge, phi_on_edge, CV_GRAY2RGB );
+
+  cv::Mat rot( cv::getRotationMatrix2D( centroid, 45, 1 ) );
+  cv::Mat rotated;
+  cv::warpAffine(model_gray,rotated,rot,model_gray.size(),cv::INTER_LINEAR,cv::BORDER_TRANSPARENT);
+  cv::imshow("rotated",rotated);
+  
+  std::cout << "\nR table:\n" << R_table_to_string(R_table);
+
+  draw_R_table_sample(phi_on_edge,phi_radian,mymask,200,centroid);
+  cv::imshow("phase for pixels belonging to the edge",phi_on_edge);
 
   size_t idx = 0;
   for ( R_table_t::const_iterator it = R_table.begin(); it != R_table.end(); ++it ) {
@@ -181,15 +247,6 @@ int main( int argc, char** argv )
       //cv::line(phi_on_edge,centroid-it->second,centroid,CV_RGB(255,0,255));
     }
   }
-  
-  
-
-
-
-  cv::imshow("phase for pixels belonging to the edge",phi_on_edge);
-
-  cv::convertScaleAbs(grad_x,grad_x);
-  cv::convertScaleAbs(grad_y,grad_y);
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -198,34 +255,12 @@ int main( int argc, char** argv )
   if( !scene.data )
     { return -1; }
 
-  cv::Mat scene_gray;
   cv::Mat scene_L1_gradient_magnitude;
-
-  /// Convert it to gray
-  cv::cvtColor( scene, scene_gray, CV_RGB2GRAY );
-  /// Generate grad_x and grad_y
-  cv::Mat scene_grad_x, scene_grad_y;
-  cv::Mat scene_abs_grad_x, scene_abs_grad_y;
-  /// Gradient X
-  cv::Sobel( scene_gray, scene_grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT );
-  cv::convertScaleAbs( scene_grad_x, scene_abs_grad_x );
-  /// Gradient Y
-  cv::Sobel( scene_gray, scene_grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT );
-  cv::convertScaleAbs( scene_grad_y, scene_abs_grad_y );
-  /// Total Gradient (approximate)
-  cv::addWeighted( scene_abs_grad_x, 1, scene_abs_grad_y, 1, 0, scene_L1_gradient_magnitude );
-
-
+  gradient_L1_norm(scene,scene_L1_gradient_magnitude);
   cv::imshow( "scene L1 gradient magnitude", scene_L1_gradient_magnitude );
 
-  cv::Mat scene_grad_x_f, scene_grad_y_f;
-  scene_grad_x.convertTo(scene_grad_x_f,CV_32F);
-  scene_grad_y.convertTo(scene_grad_y_f,CV_32F);
-
-
   cv::Mat scene_mag;
-  cv::magnitude(scene_grad_x_f,scene_grad_y_f,scene_mag);
-
+  gradient_L2_norm(scene,scene_mag);
   cv::convertScaleAbs(scene_mag,scene_mag);
   cv::imshow("scene L2 gradient magnitude",scene_mag);
 
@@ -234,10 +269,10 @@ int main( int argc, char** argv )
   cv::imshow("scene binarized L2 gradient magnitude",scene_mag_bin);
 
   cv::Mat scene_phi_degree;
-  cv::phase(scene_grad_x_f,scene_grad_y_f,scene_phi_degree,true);
+  gradient_phase(scene,scene_phi_degree,true);
 
   cv::Mat scene_phi_radian;
-  cv::phase(scene_grad_x_f,scene_grad_y_f,scene_phi_radian,false);
+  gradient_phase(scene,scene_phi_radian,false);
 
   cv::convertScaleAbs(scene_phi_degree,scene_phi_degree);
   cv::imshow("scene phase [degree]",scene_phi_degree);  
@@ -262,7 +297,7 @@ int main( int argc, char** argv )
   std::unordered_map<cv::Point,int,hash_point> votes;
   
 
-  cv::Mat accumulator = cv::Mat::zeros(scene_gray.rows,scene_gray.cols,cv::DataType<int>::type);
+  cv::Mat accumulator = cv::Mat::zeros(scene.rows,scene.cols,cv::DataType<int>::type);
   std::cout << "\nSearch:\n";
   for ( size_t i = 0; i < scene_mymask.size(); i++ ) {
     float angle = rad2deg(scene_phi_radian.at<float>(scene_mymask[i].y,scene_mymask[i].x));
