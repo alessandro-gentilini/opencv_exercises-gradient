@@ -26,5 +26,6 @@ void gradient_phase(const cv::Mat& img, cv::Mat& phase, bool is_degree );
 
 typedef std::multimap<int,cv::Point> R_table_t;
 void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& mask);
+void compute_R_table(const cv::Mat& img, R_table_t& rt);
 void draw_R_table_sample(cv::Mat& img, const cv::Mat& gradient_phase_radians, const std::vector<cv::Point>& mask, size_t period, const cv::Point& centroid);
 std::string R_table_to_string(const R_table_t& rt);

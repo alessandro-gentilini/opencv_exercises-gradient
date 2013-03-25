@@ -45,6 +45,14 @@ int main( int argc, char** argv )
   std::vector< cv::Point > mymask;
   compute_R_table(L2_gradient_magnitude,phi_radian,R_table,centroid,mymask);
 
+  R_table_t R_table_2;
+  compute_R_table(model,R_table_2);
+
+  if ( R_table != R_table_2 || R_table_to_string(R_table) != R_table_to_string(R_table_2) ) {
+    std::cerr << "doh!\n";
+    return 1;
+  }
+
   cv::Mat phi_on_edge;
   cv::bitwise_and(phi_degree,mag_bin,phi_on_edge);
   cvtColor( phi_on_edge, phi_on_edge, CV_GRAY2RGB );
@@ -272,6 +280,20 @@ void gradient_phase(const cv::Mat& img, cv::Mat& phase, bool is_degree )
 }
 
 typedef std::multimap<int,cv::Point> R_table_t;
+
+void compute_R_table(const cv::Mat& img, R_table_t& rt)
+{
+  cv::Mat L2_gradient_magnitude;
+  gradient_L2_norm(img,L2_gradient_magnitude);
+  cv::convertScaleAbs(L2_gradient_magnitude,L2_gradient_magnitude);
+
+  cv::Mat phi_radian;
+  gradient_phase(img,phi_radian,false);
+
+  cv::Point centroid;
+  std::vector< cv::Point > mymask;
+  compute_R_table(L2_gradient_magnitude,phi_radian,rt,centroid,mymask);  
+}
 
 void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& mask)
 {
