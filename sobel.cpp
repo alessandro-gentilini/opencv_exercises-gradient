@@ -57,10 +57,7 @@ int main( int argc, char** argv )
   cv::bitwise_and(phi_degree,mag_bin,phi_on_edge);
   cvtColor( phi_on_edge, phi_on_edge, CV_GRAY2RGB );
 
-  cv::Mat rot( cv::getRotationMatrix2D( centroid, 45, 1 ) );
-  cv::Mat rotated;
-  cv::warpAffine(model_gray,rotated,rot,model_gray.size(),cv::INTER_LINEAR,cv::BORDER_TRANSPARENT);
-  cv::imshow("rotated",rotated);
+
   
   std::cout << "\nR table:\n" << R_table_to_string(R_table);
 
@@ -74,12 +71,37 @@ int main( int argc, char** argv )
     }
   }
 
+
+  std::vector< int > angles;
+  std::vector< R_table_t > rts;
+  size_t jdx = 0;
+  for ( int angle = 0; angle < 360; angle+=45 ) {
+    angles.push_back( angle );
+
+    cv::Mat rot( cv::getRotationMatrix2D( centroid, angle, 1 ) );
+    cv::Mat rotated;
+    cv::warpAffine(model,rotated,rot,model.size(),cv::INTER_LINEAR,cv::BORDER_CONSTANT,CV_RGB(255,255,255));
+    std::ostringstream oss;
+    oss << jdx++ << ": rotated " << angle << "°";
+    cv::imshow(oss.str(),rotated);
+    std::ostringstream oss1;
+    oss1 << "rotated" << angle << ".bmp";
+    cv::imwrite(oss1.str(),rotated);
+
+    R_table_t rt;
+    compute_R_table(rotated,rt);
+    rts.push_back(rt);
+  }
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   cv::Mat scene(cv::imread( argv[2] ));
 
   if( !scene.data )
-    { return -1; }
+    { 
+      std::cerr << "Error";
+      return -1; 
+    }
 
   cv::Mat scene_L1_gradient_magnitude;
   gradient_L1_norm(scene,scene_L1_gradient_magnitude);
@@ -121,13 +143,11 @@ int main( int argc, char** argv )
   cv::Point location;
   int cnt = 0;
   std::unordered_map<cv::Point,int,hash_point> votes;
-  
-
   cv::Mat accumulator = cv::Mat::zeros(scene.rows,scene.cols,cv::DataType<int>::type);
   std::cout << "\nSearch:\n";
   for ( size_t i = 0; i < scene_mymask.size(); i++ ) {
     float angle = rad2deg(scene_phi_radian.at<float>(scene_mymask[i].y,scene_mymask[i].x));
-    std::pair <R_table_t::iterator, R_table_t::iterator> ret(R_table.equal_range(static_cast<int>(angle)));
+    auto ret(R_table.equal_range(static_cast<int>(angle)));
     if (ret.first != ret.second){
       std::cout << angle << "\n";
       for (R_table_t::iterator it1=ret.first; it1!=ret.second; ++it1){
@@ -148,7 +168,6 @@ int main( int argc, char** argv )
           location = candidate;
           cnt = votes[candidate];
         }
-        
       }    
     }
   }
@@ -156,26 +175,69 @@ int main( int argc, char** argv )
   double a_min,a_max;
   cv::Point p_min,p_max;
   cv::minMaxLoc(accumulator,&a_min,&a_max,&p_min,&p_max);
+  /*
   std::cerr << "min=" << a_min << " @ " << p_min << "\n";
   std::cerr << "max=" << a_max << " @ " << p_max << "\n";
   std::cerr << "cnt=" << cnt << " @ " << location << "\n";
+  */
+
+  size_t nvotes;
+  cv::Point newlocation;
+  locate(scene.rows,scene.cols,scene_mymask,scene_phi_radian,R_table,newlocation,nvotes);
+  //std::cerr << "cnt=" << nvotes << " @ " << newlocation << "\n";
+
+  size_t max_votes = 0;
+  cv::Point good_location;
+  size_t angle_index;
+  std::cerr << "\n";
+  for ( size_t i = 0; i < rts.size(); i++ ) {
+    size_t nvotes;
+    cv::Point newlocation;
+    locate(scene.rows,scene.cols,scene_mymask,scene_phi_radian,rts[i],newlocation,nvotes);
+    std::cerr << angles[i] << "°\t" << nvotes << "\t@ " << newlocation << "\n";
+    if ( nvotes > max_votes ) {
+      angle_index = i;
+      max_votes = nvotes;
+      good_location = newlocation;
+    }
+  }
+
+  std::cerr << "\nAngle is " << angles[angle_index] << "\n\n";
 
   cv::Mat acc_to_show;
   cv::convertScaleAbs( accumulator, acc_to_show );
   cv::imshow("accumulator",acc_to_show);
-
   
-  
-  draw_cross(scene,location,100,CV_RGB(0,0,255));
-  draw_cross_45(scene,p_max,100,CV_RGB(255,0,0));
+  draw_cross(scene,good_location,100,CV_RGB(0,0,255));
+  draw_cross_45(scene,good_location,100,CV_RGB(255,0,0));
   cv::imshow("Found",scene);
-
-
-
 
   cv::waitKey(0);
 
   return 0;
+}
+
+void locate(int scene_rows,int scene_cols,const std::vector<cv::Point>& mask,const cv::Mat& gradient_phase_radians,const R_table_t& rt,cv::Point& location,size_t& nvotes)
+{
+  cv::Mat accumulator = cv::Mat::zeros(scene_rows,scene_cols,cv::DataType<int>::type);
+  for ( size_t i = 0; i < mask.size(); i++ ) {
+    float angle = rad2deg(gradient_phase_radians.at<float>(mask[i].y,mask[i].x));
+    auto ret(rt.equal_range(static_cast<int>(angle)));
+    if (ret.first != ret.second){
+      for (R_table_t::const_iterator it1=ret.first; it1!=ret.second; ++it1){
+        cv::Point candidate = it1->second + mask[i];
+        if (candidate.y<accumulator.rows && candidate.x<accumulator.cols) {
+          accumulator.at<int>(candidate.y,candidate.x)++;
+        }
+      }    
+    }
+  }
+
+  double a_min,a_max;
+  cv::Point p_min,p_max;
+  cv::minMaxLoc(accumulator,&a_min,&a_max,&p_min,&p_max);
+  location = p_max;
+  nvotes = a_max;
 }
 
 void draw_cross(cv::Mat& img, const cv::Point center, float arm_length, const cv::Scalar& color )
