@@ -59,7 +59,7 @@ int main( int argc, char** argv )
 
 
   
-  std::cout << "\nR table:\n" << R_table_to_string(R_table);
+  //std::cout << "\nR table:\n" << R_table_to_string(R_table);
 
   draw_R_table_sample(phi_on_edge,phi_radian,mymask,200,centroid);
   cv::imshow("phase for pixels belonging to the edge",phi_on_edge);
@@ -149,9 +149,9 @@ int main( int argc, char** argv )
     float angle = rad2deg(scene_phi_radian.at<float>(scene_mymask[i].y,scene_mymask[i].x));
     auto ret(R_table.equal_range(static_cast<int>(angle)));
     if (ret.first != ret.second){
-      std::cout << angle << "\n";
+      //std::cout << angle << "\n";
       for (R_table_t::iterator it1=ret.first; it1!=ret.second; ++it1){
-        std::cout << "\t" << it1->second << "\n";
+        //std::cout << "\t" << it1->second << "\n";
         cv::Point candidate = it1->second + scene_mymask[i];
         if (candidate.y >= 0 && candidate.y<accumulator.rows && candidate.x >= 0 && candidate.x<accumulator.cols) {
           accumulator.at<int>(candidate.y,candidate.x)++;
@@ -223,14 +223,12 @@ void locate(int scene_rows,int scene_cols,const std::vector<cv::Point>& mask,con
   for ( size_t i = 0; i < mask.size(); i++ ) {
     float angle = rad2deg(gradient_phase_radians.at<float>(mask[i].y,mask[i].x));
     auto ret(rt.equal_range(static_cast<int>(angle)));
-    if (ret.first != ret.second){
-      for (R_table_t::const_iterator it1=ret.first; it1!=ret.second; ++it1){
-        cv::Point candidate = it1->second + mask[i];
-        if (candidate.y >= 0 && candidate.y<accumulator.rows && candidate.x >=0 && candidate.x<accumulator.cols) {
-          accumulator.at<int>(candidate.y,candidate.x)++;
-        }
-      }    
-    }
+    for (R_table_t::const_iterator it1=ret.first; it1!=ret.second; ++it1){
+      cv::Point candidate = it1->second + mask[i];
+      if (candidate.y >= 0 && candidate.y<accumulator.rows && candidate.x >=0 && candidate.x<accumulator.cols) {
+        accumulator.at<int>(candidate.y,candidate.x)++;
+      }
+    }    
   }
 
   double a_min,a_max;
@@ -341,8 +339,6 @@ void gradient_phase(const cv::Mat& img, cv::Mat& phase, bool is_degree )
   cv::phase(grad_x_f,grad_y_f,phase,is_degree);
 }
 
-typedef std::multimap<int,cv::Point> R_table_t;
-
 void compute_R_table(const cv::Mat& img, R_table_t& rt)
 {
   cv::Mat L2_gradient_magnitude;
@@ -381,7 +377,12 @@ void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase
 
   for ( size_t i = 0; i < mymask.size(); i++ ){
     float angle = rad2deg(gradient_phase_radians.at<float>(mymask[i].y,mymask[i].x));
-    rt.insert(std::make_pair(static_cast<int>(angle),centroid-mymask[i]));
+    Augmented_point r = Augmented_point(centroid-mymask[i]);
+
+    auto ret(rt.equal_range(angle));
+    //std::find(ret.first,ret.second,r);
+
+    rt.insert(std::make_pair(static_cast<int>(angle),r));
   }
 
   mask = mymask;
