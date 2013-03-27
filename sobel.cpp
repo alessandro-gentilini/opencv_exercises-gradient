@@ -153,7 +153,7 @@ int main( int argc, char** argv )
       for (R_table_t::iterator it1=ret.first; it1!=ret.second; ++it1){
         std::cout << "\t" << it1->second << "\n";
         cv::Point candidate = it1->second + scene_mymask[i];
-        if (candidate.y<accumulator.rows && candidate.x<accumulator.cols) {
+        if (candidate.y >= 0 && candidate.y<accumulator.rows && candidate.x >= 0 && candidate.x<accumulator.cols) {
           accumulator.at<int>(candidate.y,candidate.x)++;
         }
         //draw_cross(scene,scene_mymask[i],3);
@@ -226,7 +226,7 @@ void locate(int scene_rows,int scene_cols,const std::vector<cv::Point>& mask,con
     if (ret.first != ret.second){
       for (R_table_t::const_iterator it1=ret.first; it1!=ret.second; ++it1){
         cv::Point candidate = it1->second + mask[i];
-        if (candidate.y<accumulator.rows && candidate.x<accumulator.cols) {
+        if (candidate.y >= 0 && candidate.y<accumulator.rows && candidate.x >=0 && candidate.x<accumulator.cols) {
           accumulator.at<int>(candidate.y,candidate.x)++;
         }
       }    
@@ -373,6 +373,9 @@ void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase
       }
     }
   }
+
+  if ( mymask.empty() ) return;
+
   centroid.x /= mymask.size();
   centroid.y /= mymask.size();  
 
