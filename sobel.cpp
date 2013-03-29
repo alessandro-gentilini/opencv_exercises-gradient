@@ -4,6 +4,8 @@
 
 int main( int argc, char** argv )
 {
+  bool show_dbg_img = argc == 4;
+
   // begin of model creation
 
   // read the model image
@@ -59,6 +61,13 @@ int main( int argc, char** argv )
   }  
 
   // end of search
+
+  if ( show_dbg_img ) {
+   imshow("model",model_img);
+   draw_cross(scene,locations.begin()->second,100,CV_RGB(255,0,0));
+   imshow("scene",scene);
+   cv::waitKey();
+  }  
 
   return 0;
 }
