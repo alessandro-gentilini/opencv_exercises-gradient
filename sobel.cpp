@@ -65,42 +65,47 @@ int main( int argc, char** argv )
 
 void search(const cv::Mat& scene, const Model_Tables_t& rts, const Model_Angles_t& angles, Locations_t& locations, Votes_t& votes)
 {
+  // Compute the norm of the gradient
   cv::Mat scene_mag;
   gradient_L2_norm(scene,scene_mag);
   cv::convertScaleAbs(scene_mag,scene_mag);
 
+  // Binarize the gradient magnitude and assuming that the resulting white pixels are the pixels belonging to the edges
   cv::Mat scene_mag_bin;
   cv::threshold(scene_mag,scene_mag_bin,128,255,cv::THRESH_BINARY);
 
+  // Compute the phase of the gradient (todo: avoid to compute the phase for all the pixels, maybe it is faster to compute it just for the edge's pixels?)
   cv::Mat scene_phi_radian;
   gradient_phase(scene,scene_phi_radian,false);
 
-  std::vector< cv::Point > scene_mymask;
+  // Fill the collection containing the pixels on the edges
+  std::vector< cv::Point > pixels_on_edge;
   for ( int x = 0; x < scene_mag_bin.cols; x+=1 ){
     for ( int y = 0; y < scene_mag_bin.rows; y+=1 ){
       if(scene_mag_bin.at<unsigned char>(y,x)==255){
-        scene_mymask.push_back(cv::Point(x,y));
+        pixels_on_edge.push_back(cv::Point(x,y));
       }
     }
   }
 
+  // Search for the model in the scene
   locations.clear();
   votes.resize(rts.size());
   for ( size_t i = 0; i < rts.size(); i++ ) {
     cv::Point loc;
-    locate(scene.rows,scene.cols,scene_mymask,scene_phi_radian,rts[i],loc,votes[i]);
+    locate(scene.rows,scene.cols,pixels_on_edge,scene_phi_radian,rts[i],loc,votes[i]);
     locations.insert(std::make_pair(angles[i],loc));
   }
 }
 
-void locate(int scene_rows,int scene_cols,const std::vector<cv::Point>& mask,const cv::Mat& gradient_phase_radians,const R_table_t& rt,cv::Point& location,size_t& nvotes)
+void locate(int scene_rows,int scene_cols,const std::vector<cv::Point>& pixel_on_edge,const cv::Mat& gradient_phase_radians,const R_table_t& rt,cv::Point& location,size_t& nvotes)
 {
   cv::Mat accumulator = cv::Mat::zeros(scene_rows,scene_cols,cv::DataType<int>::type);
-  for ( size_t i = 0; i < mask.size(); i++ ) {
-    float angle = rad2deg(gradient_phase_radians.at<float>(mask[i].y,mask[i].x));
+  for ( size_t i = 0; i < pixel_on_edge.size(); i++ ) {
+    float angle = rad2deg(gradient_phase_radians.at<float>(pixel_on_edge[i].y,pixel_on_edge[i].x));
     auto ret(rt.equal_range(static_cast<int>(angle)));
     for (R_table_t::const_iterator it1=ret.first; it1!=ret.second; ++it1){
-      cv::Point candidate = it1->second + mask[i];
+      cv::Point candidate = it1->second + pixel_on_edge[i];
       if (candidate.y >= 0 && candidate.y<accumulator.rows && candidate.x >=0 && candidate.x<accumulator.cols) {
         accumulator.at<int>(candidate.y,candidate.x)++;
       }
@@ -224,41 +229,39 @@ void compute_R_table(const cv::Mat& img, R_table_t& rt, cv::Point& centroid)
   cv::Mat phi_radian;
   gradient_phase(img,phi_radian,false);
 
-  std::vector< cv::Point > mymask;
-  compute_R_table(L2_gradient_magnitude,phi_radian,rt,centroid,mymask);  
+  std::vector< cv::Point > pixel_on_edge;
+  compute_R_table(L2_gradient_magnitude,phi_radian,rt,centroid,pixel_on_edge);  
 }
 
-void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& mask)
+void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& pixel_on_edge)
 {
   rt.clear();
+  pixel_on_edge.clear();
 
   cv::Mat mag_bin;
   cv:threshold(gradient_norm,mag_bin,128,255,cv::THRESH_BINARY);
 
-  std::vector< cv::Point > mymask;
   centroid = cv::Point(0,0);
   for ( int x = 0; x < mag_bin.cols; x+=1 ){//15
     for ( int y = 0; y < mag_bin.rows; y+=1 ){
       if(mag_bin.at<unsigned char>(y,x)==255){
         cv::Point p(x,y);
-        mymask.push_back(p);
+        pixel_on_edge.push_back(p);
         centroid += p;
       }
     }
   }
 
-  if ( mymask.empty() ) return;
+  if ( pixel_on_edge.empty() ) return;
 
-  centroid.x /= mymask.size();
-  centroid.y /= mymask.size();  
+  centroid.x /= pixel_on_edge.size();
+  centroid.y /= pixel_on_edge.size();  
 
-  for ( size_t i = 0; i < mymask.size(); i++ ){
-    float angle = rad2deg(gradient_phase_radians.at<float>(mymask[i].y,mymask[i].x));
-    cv::Point r = centroid-mymask[i];
+  for ( size_t i = 0; i < pixel_on_edge.size(); i++ ){
+    float angle = rad2deg(gradient_phase_radians.at<float>(pixel_on_edge[i].y,pixel_on_edge[i].x));
+    cv::Point r = centroid-pixel_on_edge[i];
     rt.insert(std::make_pair(static_cast<int>(angle),r));
   }
-
-  mask = mymask;
 }
 
 void draw_R_table_sample(cv::Mat& img, const cv::Mat& gradient_phase_radians, const std::vector<cv::Point>& mask, size_t period, const cv::Point& centroid)
