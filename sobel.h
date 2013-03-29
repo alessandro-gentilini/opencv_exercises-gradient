@@ -44,7 +44,10 @@ typedef std::multimap<int,cv::Point> R_table_t;
 
 std::ostream& operator<<(std::ostream& os, const R_table_t& rt);
 
-void compute_model(const cv::Mat& model_img,std::vector< R_table_t >& rts, std::vector< int >& angles);
+typedef std::vector< R_table_t > Model_Tables_t;
+typedef std::vector< int > Model_Angles_t;
+
+void compute_model(const cv::Mat& model_img, const Model_Angles_t& angles, Model_Tables_t& rts);
 
 void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& mask);
 void compute_R_table(const cv::Mat& img, R_table_t& rt, cv::Point& centroid);
@@ -54,7 +57,6 @@ void draw_R_table_sample(cv::Mat& img, const cv::Mat& gradient_phase_radians, co
 void locate(int scene_rows,int scene_cols,const std::vector<cv::Point>& mask,const cv::Mat& gradient_phase_radians,const R_table_t& rt,cv::Point& location,size_t& nvotes);
 
 typedef std::map<int,cv::Point> Locations_t;
-typedef std::vector< R_table_t > Model_Tables_t;
-typedef std::vector< int > Model_Angles_t;
+
 typedef std::vector< size_t > Votes_t;
 void search(const cv::Mat& scene, const Model_Tables_t& rts, const Model_Angles_t& angles, Locations_t& locations, Votes_t& votes);

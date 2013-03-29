@@ -13,10 +13,15 @@ int main( int argc, char** argv )
     return 1; 
   }
 
+  // compute the angles for the model
+  Model_Angles_t angles;
+  for ( int a = 0; a < 360; a+=45 ) {
+    angles.push_back(a);
+  }
+
   // compute the model
-  std::vector< int > angles;
   std::vector< R_table_t > rts;
-  compute_model(model_img,rts,angles);
+  compute_model(model_img,angles,rts);
 
   // save the 0 degree R table on file (for regression test)
   std::ofstream rt_file("rt_0.csv"); 
@@ -275,6 +280,7 @@ void draw_R_table_sample(cv::Mat& img, const cv::Mat& gradient_phase_radians, co
   draw_cross(img,centroid,100,CV_RGB(0,0,255));
 }
 
+/// Operator for printing an R table
 std::ostream& operator<<(std::ostream& os, const R_table_t& rt)
 {
   os << "gradient_phase,r_x,r_y\n";
@@ -287,10 +293,10 @@ std::ostream& operator<<(std::ostream& os, const R_table_t& rt)
   return os;
 }
 
-void compute_model(const cv::Mat& model_img,std::vector< R_table_t >& rts, std::vector< int >& angles)
+void compute_model(const cv::Mat& model_img,const std::vector< int >& angles, std::vector< R_table_t >& rts)
 {
+  // clear the return values
   rts.clear();
-  angles.clear();
 
   // compute the R table for angle 0, to get an initial value for the centroid
   R_table_t rt0;
@@ -298,18 +304,18 @@ void compute_model(const cv::Mat& model_img,std::vector< R_table_t >& rts, std::
   compute_R_table(model_img,rt0,centroid);
 
   // compute the R tables for various model orientation
-  size_t jdx = 0;
-  for ( int angle = 0; angle < 360; angle+=45 ) {
-    angles.push_back( angle );
-
-    cv::Mat rot( cv::getRotationMatrix2D( centroid, angle, 1 ) );
+  for ( size_t i = 0; i < angles.size(); i++ ) {
+    // rotate the model image
+    cv::Mat rot( cv::getRotationMatrix2D( centroid, angles[i], 1 ) );
     cv::Mat rotated;
     cv::warpAffine(model_img,rotated,rot,model_img.size(),cv::INTER_LINEAR,cv::BORDER_CONSTANT,CV_RGB(255,255,255));
 
+    // save the rotated model image
     std::ostringstream name;
-    name << "rotated" << angle << ".bmp";
+    name << "rotated" << angles[i] << ".bmp";
     cv::imwrite(name.str(),rotated);
 
+    // compute the R table for the rotated model image
     R_table_t rt;
     cv::Point dont_care;
     compute_R_table(rotated,rt,dont_care);
