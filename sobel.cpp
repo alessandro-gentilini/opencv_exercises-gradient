@@ -212,7 +212,7 @@ int main( int argc, char** argv )
   draw_cross_45(scene,good_location,100,CV_RGB(255,0,0));
   cv::imshow("Found",scene);
 
-  cv::waitKey(0);
+  //cv::waitKey(0);
 
   return 0;
 }
