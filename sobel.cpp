@@ -13,8 +13,6 @@ int main( int argc, char** argv )
   cv::Mat model_gray;
   cv::cvtColor( model, model_gray, CV_RGB2GRAY );
 
-  //GaussianBlur( model, model, Size(3,3), 0, 0, cv::BORDER_DEFAULT );
-
   cv::Mat L1_gradient_magnitude;
   gradient_L1_norm(model,L1_gradient_magnitude);
   cv::imshow( "L1 gradient magnitude", L1_gradient_magnitude );
