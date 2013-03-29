@@ -4,17 +4,14 @@
 
 int main( int argc, char** argv )
 {
-  cv::Mat model,model_gray;
-  int c;
+  cv::Mat model = cv::imread( argv[1] );
+  if( !model.data ) { 
+    std::cerr << "Error loading model image\n";
+    return 1; 
+  }
 
-  /// Load an image
-  model = cv::imread( argv[1] );
+  cv::Mat model_gray;
   cv::cvtColor( model, model_gray, CV_RGB2GRAY );
-
-  cv::imshow("model",model);
-
-  if( !model.data )
-    { return -1; }
 
   //GaussianBlur( model, model, Size(3,3), 0, 0, cv::BORDER_DEFAULT );
 
@@ -48,10 +45,13 @@ int main( int argc, char** argv )
   R_table_t R_table_2;
   compute_R_table(model,R_table_2);
 
-  if ( R_table != R_table_2 || R_table_to_string(R_table) != R_table_to_string(R_table_2) ) {
+  if ( R_table != R_table_2 ) {
     std::cerr << "doh!\n";
     return 1;
   }
+
+  std::ofstream rt_file("rt_0.csv"); 
+  rt_file << R_table;
 
   cv::Mat phi_on_edge;
   cv::bitwise_and(phi_degree,mag_bin,phi_on_edge);
@@ -377,11 +377,7 @@ void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase
 
   for ( size_t i = 0; i < mymask.size(); i++ ){
     float angle = rad2deg(gradient_phase_radians.at<float>(mymask[i].y,mymask[i].x));
-    Augmented_point r = Augmented_point(centroid-mymask[i]);
-
-    auto ret(rt.equal_range(angle));
-    //std::find(ret.first,ret.second,r);
-
+    cv::Point r = centroid-mymask[i];
     rt.insert(std::make_pair(static_cast<int>(angle),r));
   }
 
@@ -407,16 +403,16 @@ void draw_R_table_sample(cv::Mat& img, const cv::Mat& gradient_phase_radians, co
   draw_cross(img,centroid,100,CV_RGB(0,0,255));
 }
 
-std::string R_table_to_string(const R_table_t& rt)
+std::ostream& operator<<(std::ostream& os, const R_table_t& rt)
 {
-  std::ostringstream oss;
+  os << "gradient_phase,r_x,r_y\n";
   for ( auto it = rt.begin(); it != rt.end(); ++it ) {
-    auto ret(rt.equal_range(it->first));
-    oss << it->first << "\n";
-    for ( auto it1=ret.first; it1!=ret.second; ++it1 ){
-      oss << "\t" << it1->second << "\n";
+    auto range(rt.equal_range(it->first));
+    for ( auto jt=range.first; jt!=range.second; ++jt ){
+      os << it->first << "," << jt->second.x << "," << jt->second.y << "\n";
     }
   }
-  return oss.str();
+  return os;
 }
+
 
