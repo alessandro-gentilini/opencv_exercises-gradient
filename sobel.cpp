@@ -67,9 +67,9 @@ int main( int argc, char** argv )
    draw_cross(scene,locations.begin()->second,100,CV_RGB(255,0,0));
    imshow("scene",scene);
    cv::waitKey();
-  }  
+ }  
 
-  return 0;
+ return 0;
 }
 
 void search(const cv::Mat& scene, const Model_Tables_t& rts, const Model_Angles_t& angles, Locations_t& locations, Votes_t& votes)
