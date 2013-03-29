@@ -51,6 +51,7 @@ int main( int argc, char** argv )
   }
 
   std::ofstream rt_file("rt_0.csv"); 
+  rt_file << "# " << argv[1] << " " << argv[2] << "\n";
   rt_file << R_table;
 
   cv::Mat phi_on_edge;
@@ -59,7 +60,6 @@ int main( int argc, char** argv )
 
 
   
-  //std::cout << "\nR table:\n" << R_table_to_string(R_table);
 
   draw_R_table_sample(phi_on_edge,phi_radian,mymask,200,centroid);
   cv::imshow("phase for pixels belonging to the edge",phi_on_edge);
@@ -144,7 +144,6 @@ int main( int argc, char** argv )
   int cnt = 0;
   std::unordered_map<cv::Point,int,hash_point> votes;
   cv::Mat accumulator = cv::Mat::zeros(scene.rows,scene.cols,cv::DataType<int>::type);
-  std::cout << "\nSearch:\n";
   for ( size_t i = 0; i < scene_mymask.size(); i++ ) {
     float angle = rad2deg(scene_phi_radian.at<float>(scene_mymask[i].y,scene_mymask[i].x));
     auto ret(R_table.equal_range(static_cast<int>(angle)));
@@ -190,19 +189,22 @@ int main( int argc, char** argv )
   cv::Point good_location;
   size_t angle_index;
   std::cerr << "\n";
+ 
+  std::ofstream result_file("result.csv");
+  result_file << "# " << argv[1] << " " << argv[2] << "\n";
+  result_file << "angle,votes,location_x,location_y\n";
+
   for ( size_t i = 0; i < rts.size(); i++ ) {
     size_t nvotes;
     cv::Point newlocation;
     locate(scene.rows,scene.cols,scene_mymask,scene_phi_radian,rts[i],newlocation,nvotes);
-    std::cerr << angles[i] << "°\t" << nvotes << "\t@ " << newlocation << "\n";
+    result_file << angles[i] << "," << nvotes << "," << newlocation.x << "," << newlocation.y << "\n";
     if ( nvotes > max_votes ) {
       angle_index = i;
       max_votes = nvotes;
       good_location = newlocation;
-    }
+    } 
   }
-
-  std::cerr << "\nAngle is " << angles[angle_index] << "\n\n";
 
   cv::Mat acc_to_show;
   cv::convertScaleAbs( accumulator, acc_to_show );
