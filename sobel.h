@@ -47,7 +47,7 @@ std::ostream& operator<<(std::ostream& os, const R_table_t& rt);
 typedef std::vector< R_table_t > Model_Tables_t;
 typedef std::vector< int > Model_Angles_t;
 
-void compute_model(const cv::Mat& model_img, const Model_Angles_t& angles, Model_Tables_t& rts);
+void compute_model(const cv::Mat& model_img, const Model_Angles_t& angles, Model_Tables_t& rts, cv::Point& centroid );
 
 void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& pixel_on_edge);
 void compute_R_table(const cv::Mat& img, R_table_t& rt, cv::Point& centroid);
@@ -60,3 +60,4 @@ typedef std::map<int,cv::Point> Locations_t;
 
 typedef std::vector< size_t > Votes_t;
 void search(const cv::Mat& scene, const Model_Tables_t& rts, const Model_Angles_t& angles, Locations_t& locations, Votes_t& votes);
+void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &rotated, std::vector< cv::Point > &rotated_corners );
