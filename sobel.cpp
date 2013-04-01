@@ -371,8 +371,8 @@ void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &ro
 
     // todo I would like to use the cv::convertPointsToHomogeneous
     cv::Mat midpoint(3, 1, cv::DataType<double>::type);
-    midpoint.at<double>(0, 0) = img.cols / 2;
-    midpoint.at<double>(1, 0) = img.rows / 2;
+    midpoint.at<double>(0, 0) = img.cols / 2.0;
+    midpoint.at<double>(1, 0) = img.rows / 2.0;
     midpoint.at<double>(2, 0) = 1;
 
     cv::Mat top_left(3, 1, cv::DataType<double>::type);
@@ -381,18 +381,18 @@ void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &ro
     top_left.at<double>(2, 0) = 1;
 
     cv::Mat top_right(3, 1, cv::DataType<double>::type);
-    top_right.at<double>(0, 0) = img.cols;
+    top_right.at<double>(0, 0) = img.cols-1;
     top_right.at<double>(1, 0) = 0;
     top_right.at<double>(2, 0) = 1;
 
     cv::Mat bottom_right(3, 1, cv::DataType<double>::type);
-    bottom_right.at<double>(0, 0) = img.cols;
-    bottom_right.at<double>(1, 0) = img.rows;
+    bottom_right.at<double>(0, 0) = img.cols-1;
+    bottom_right.at<double>(1, 0) = img.rows-1;
     bottom_right.at<double>(2, 0) = 1;
 
     cv::Mat bottom_left(3, 1, cv::DataType<double>::type);
     bottom_left.at<double>(0, 0) = 0;
-    bottom_left.at<double>(1, 0) = img.rows;
+    bottom_left.at<double>(1, 0) = img.rows-1;
     bottom_left.at<double>(2, 0) = 1;
 
     cv::Mat top_left_rotated = rot * top_left;
@@ -407,10 +407,9 @@ void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &ro
     rotated_corners[3] = cv::Point(0.5+bottom_left_rotated.at<double>(0, 0), 0.5+bottom_left_rotated.at<double>(1, 0)); 
 
     cv::Rect bb( cv::boundingRect( rotated_corners ) );
-
     cv::Size sz(bb.width, bb.height);
 
-    cv::Point displacement(bb.width / 2 - rotated_midpoint.at<double>(0, 0), bb.height / 2 - rotated_midpoint.at<double>(1, 0));
+    cv::Point displacement(0.5 + bb.width / 2.0 - rotated_midpoint.at<double>(0, 0), 0.5 + bb.height / 2.0 - rotated_midpoint.at<double>(1, 0));
 
     rot.at<double>(0, 2) += displacement.x;
     rot.at<double>(1, 2) += displacement.y;
@@ -420,5 +419,5 @@ void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &ro
         return p + displacement;
     });
 
-    cv::warpAffine(img, rotated, rot, sz, cv::INTER_LINEAR, cv::BORDER_CONSTANT, CV_RGB(255, 255, 255));
+    cv::warpAffine(img, rotated, rot, sz, cv::INTER_LINEAR, cv::BORDER_CONSTANT, CV_RGB(0, 0, 0));
 }
