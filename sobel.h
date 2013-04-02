@@ -56,7 +56,8 @@ void draw_R_table_sample(cv::Mat& img, const cv::Mat& gradient_phase_radians, co
 
 void locate(int scene_rows,int scene_cols,const std::vector<cv::Point>& pixel_on_edge,const cv::Mat& gradient_phase_radians,const R_table_t& rt,cv::Point& location,size_t& nvotes);
 
-typedef std::map<int,cv::Point> Locations_t;
+typedef int angle_t;
+typedef std::map<angle_t,cv::Point> Locations_t;
 
 typedef std::vector< size_t > Votes_t;
 void search(const cv::Mat& scene, const Model_Tables_t& rts, const Model_Angles_t& angles, Locations_t& locations, Votes_t& votes);

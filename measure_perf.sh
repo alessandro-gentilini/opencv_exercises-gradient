@@ -5,7 +5,7 @@ cp sobel.cpp $dest
 cp sobel.h $dest
 cp CMakeLists.txt $dest
 
-./sobel A.bmp blurred_scene.bmp
+./sobel test_model.bmp test_scene.bmp
 
 cp rt*.csv $dest
 diff ./baseline/rt_0.csv $dest/rt_0.csv

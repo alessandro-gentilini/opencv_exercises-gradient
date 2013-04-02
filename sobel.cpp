@@ -6,6 +6,17 @@ bool show_dbg_img;
 
 int main( int argc, char **argv )
 {
+
+    cv::Mat a_rect(99,99,cv::DataType<unsigned char>::type);
+    a_rect = 255*cv::Mat::ones(99,99,cv::DataType<unsigned char>::type);
+    cv::Point top_left(33,33);
+    cv::Point bottom_right(65,65);
+    cv::rectangle(a_rect,top_left,bottom_right,0);
+    cv::line(a_rect,top_left,bottom_right,0);
+    cv::line(a_rect,cv::Point(46,52),cv::Point(52,46),0);
+    cv::rectangle(a_rect,bottom_right-cv::Point(5,5),bottom_right,0);
+    imwrite("a_rect.bmp",a_rect);
+
     show_dbg_img = argc == 4;
 
     // begin of model creation
@@ -34,6 +45,7 @@ int main( int argc, char **argv )
     std::ofstream rt_file("rt_0.csv");
     rt_file << "# " << argv[1] << " " << argv[2] << "\n";
     rt_file << rts[0];
+    rt_file.close();
 
     // end of model creation
 
@@ -61,20 +73,32 @@ int main( int argc, char **argv )
     result_file << "# " << argv[1] << " " << argv[2] << "\n";
     result_file << "angle,votes,location_x,location_y\n";
     size_t i = 0;
+    size_t max_vote = 0;
+    cv::Point best_location;
+    const size_t sz = 6;
+    const cv::Scalar colors[sz] = {CV_RGB(255,0,0),CV_RGB(0,255,0),CV_RGB(0,0,255),CV_RGB(0,255,255),CV_RGB(255,255,0),CV_RGB(255,0,255)};
     for ( auto it = locations.begin(); it != locations.end(); ++it )
     {
         result_file << it->first << "," << votes[i] << "," << it->second.x << "," << it->second.y << "\n";
+        draw_cross(scene, it->second, 40, colors[i%sz]);
+        if ( votes[i] > max_vote ) {
+            best_location = it->second;
+            max_vote = votes[i];
+        }
         i++;
     }
+    result_file.close();
 
     // end of search
 
     if ( show_dbg_img )
     {
-        draw_cross(model_img, centroid, 100, CV_RGB(255, 0, 0));
-        imshow("model", model_img);
-        draw_cross(scene, locations.begin()->second, 100, CV_RGB(255, 0, 0));
-        imshow("scene", scene);
+        draw_cross(model_img, centroid, 40, CV_RGB(255, 0, 0));
+        cv::imshow("model", model_img);
+        cv::imwrite("model.bmp",model_img);
+        draw_cross_45(scene, best_location, 40, CV_RGB(255, 0, 0));
+        cv::imshow("scene", scene);
+        cv::imwrite("scene.bmp", scene);
         cv::waitKey();
     }
 
