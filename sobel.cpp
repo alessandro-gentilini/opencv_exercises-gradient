@@ -2,9 +2,11 @@
 
 #include "sobel.h"
 
+bool show_dbg_img;
+
 int main( int argc, char **argv )
 {
-    bool show_dbg_img = argc == 4;
+    show_dbg_img = argc == 4;
 
     // begin of model creation
 
@@ -243,7 +245,7 @@ void gradient_phase(const cv::Mat &img, cv::Mat &phase, bool is_degree )
     cv::phase(grad_x_f, grad_y_f, phase, is_degree);
 }
 
-void compute_R_table(const cv::Mat &img, R_table_t &rt, cv::Point &centroid)
+void compute_R_table(const cv::Mat &img, const std::vector< cv::Point > &rotated_corners, R_table_t &rt, cv::Point &centroid)
 {
     cv::Mat L2_gradient_magnitude;
     gradient_L2_norm(img, L2_gradient_magnitude);
@@ -253,10 +255,10 @@ void compute_R_table(const cv::Mat &img, R_table_t &rt, cv::Point &centroid)
     gradient_phase(img, phi_radian, false);
 
     std::vector< cv::Point > pixel_on_edge;
-    compute_R_table(L2_gradient_magnitude, phi_radian, rt, centroid, pixel_on_edge);
+    compute_R_table(rotated_corners, L2_gradient_magnitude, phi_radian, rt, centroid, pixel_on_edge);
 }
 
-void compute_R_table(const cv::Mat &gradient_norm, const cv::Mat &gradient_phase_radians, R_table_t &rt, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge)
+void compute_R_table(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, const cv::Mat &gradient_phase_radians, R_table_t &rt, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge)
 {
     rt.clear();
     pixel_on_edge.clear();
@@ -269,13 +271,34 @@ void compute_R_table(const cv::Mat &gradient_norm, const cv::Mat &gradient_phase
     {
         for ( int y = 0; y < mag_bin.rows; y += 1 )
         {
-            if (mag_bin.at<unsigned char>(y, x) == 255)
+            cv::Point query(x, y);
+            // I use the polygon test to exclude pixels that are on the false edge due to rotation
+            if ( cv::pointPolygonTest(rotated_corners, query, true) >= 2 && mag_bin.at<unsigned char>(y, x) == 255)
             {
                 cv::Point p(x, y);
                 pixel_on_edge.push_back(p);
                 centroid += p;
             }
+            else
+            {
+                mag_bin.at<unsigned char>(y, x) = 0;
+            }
         }
+    }
+
+    if ( show_dbg_img )
+    {
+        static int idx = 0;
+
+        std::ostringstream name_1;
+        name_1 << idx << "_gradient_norm";
+        imshow(name_1.str(), gradient_norm);
+
+        std::ostringstream name_2;
+        name_2 << idx << "_filtered_gradient_norm";
+        imshow(name_2.str(), mag_bin);
+
+        idx++;
     }
 
     if ( pixel_on_edge.empty() ) return;
@@ -332,14 +355,19 @@ double distance(const cv::Point &a, const cv::Point &b)
     return sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
 }
 
-void compute_model(const cv::Mat &model_img, const std::vector< int > &angles, std::vector< R_table_t > &rts, cv::Point& centroid)
+void compute_model(const cv::Mat &model_img, const std::vector< int > &angles, std::vector< R_table_t > &rts, cv::Point &centroid)
 {
     // clear the return values
     rts.clear();
 
     // compute the R table for angle 0, to get an initial value for the centroid
     R_table_t rt0;
-    compute_R_table(model_img, rt0, centroid);
+    std::vector< cv::Point > rotated_corners(4);
+    rotated_corners[0] = cv::Point(0, 0);
+    rotated_corners[1] = cv::Point(model_img.cols - 1, 0);
+    rotated_corners[2] = cv::Point(model_img.cols - 1, model_img.rows - 1);
+    rotated_corners[3] = cv::Point(0, model_img.rows - 1);
+    compute_R_table(model_img, rotated_corners, rt0, centroid);
 
     // compute the R tables for various model orientation
     for ( size_t i = 0; i < angles.size(); i++ )
@@ -347,7 +375,7 @@ void compute_model(const cv::Mat &model_img, const std::vector< int > &angles, s
         cv::Mat rotated;
         std::vector< cv::Point > rotated_corners(4);
         rotate( model_img, centroid, angles[i], rotated, rotated_corners );
-        
+
         // save the rotated model image
         std::ostringstream name;
         name << "rotated" << angles[i] << ".bmp";
@@ -356,12 +384,12 @@ void compute_model(const cv::Mat &model_img, const std::vector< int > &angles, s
         // compute the R table for the rotated model image
         R_table_t rt;
         cv::Point dont_care;
-        compute_R_table(rotated, rt, dont_care);
+        compute_R_table(rotated, rotated_corners, rt, dont_care);
         rts.push_back(rt);
     }
 }
 
-// Rotate the img about the point center, angle is in degree. 
+// Rotate the img about the point center, angle is in degree.
 // rotated is the rotated image, rotated_corners are the position of
 // the rotated corners of image.
 void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &rotated, std::vector< cv::Point > &rotated_corners )
@@ -381,18 +409,18 @@ void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &ro
     top_left.at<double>(2, 0) = 1;
 
     cv::Mat top_right(3, 1, cv::DataType<double>::type);
-    top_right.at<double>(0, 0) = img.cols-1;
+    top_right.at<double>(0, 0) = img.cols - 1;
     top_right.at<double>(1, 0) = 0;
     top_right.at<double>(2, 0) = 1;
 
     cv::Mat bottom_right(3, 1, cv::DataType<double>::type);
-    bottom_right.at<double>(0, 0) = img.cols-1;
-    bottom_right.at<double>(1, 0) = img.rows-1;
+    bottom_right.at<double>(0, 0) = img.cols - 1;
+    bottom_right.at<double>(1, 0) = img.rows - 1;
     bottom_right.at<double>(2, 0) = 1;
 
     cv::Mat bottom_left(3, 1, cv::DataType<double>::type);
     bottom_left.at<double>(0, 0) = 0;
-    bottom_left.at<double>(1, 0) = img.rows-1;
+    bottom_left.at<double>(1, 0) = img.rows - 1;
     bottom_left.at<double>(2, 0) = 1;
 
     cv::Mat top_left_rotated = rot * top_left;
@@ -401,10 +429,10 @@ void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &ro
     cv::Mat bottom_left_rotated = rot * bottom_left;
     cv::Mat rotated_midpoint = rot * midpoint;
 
-    rotated_corners[0] = cv::Point(0.5+top_left_rotated.at<double>(0, 0), 0.5+top_left_rotated.at<double>(1, 0));
-    rotated_corners[1] = cv::Point(0.5+top_right_rotated.at<double>(0, 0), 0.5+top_right_rotated.at<double>(1, 0));
-    rotated_corners[2] = cv::Point(0.5+bottom_right_rotated.at<double>(0, 0), 0.5+bottom_right_rotated.at<double>(1, 0));
-    rotated_corners[3] = cv::Point(0.5+bottom_left_rotated.at<double>(0, 0), 0.5+bottom_left_rotated.at<double>(1, 0)); 
+    rotated_corners[0] = cv::Point(0.5 + top_left_rotated.at<double>(0, 0), 0.5 + top_left_rotated.at<double>(1, 0));
+    rotated_corners[1] = cv::Point(0.5 + top_right_rotated.at<double>(0, 0), 0.5 + top_right_rotated.at<double>(1, 0));
+    rotated_corners[2] = cv::Point(0.5 + bottom_right_rotated.at<double>(0, 0), 0.5 + bottom_right_rotated.at<double>(1, 0));
+    rotated_corners[3] = cv::Point(0.5 + bottom_left_rotated.at<double>(0, 0), 0.5 + bottom_left_rotated.at<double>(1, 0));
 
     cv::Rect bb( cv::boundingRect( rotated_corners ) );
     cv::Size sz(bb.width, bb.height);
@@ -421,3 +449,4 @@ void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &ro
 
     cv::warpAffine(img, rotated, rot, sz, cv::INTER_LINEAR, cv::BORDER_CONSTANT, CV_RGB(0, 0, 0));
 }
+

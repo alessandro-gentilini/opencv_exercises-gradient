@@ -49,8 +49,8 @@ typedef std::vector< int > Model_Angles_t;
 
 void compute_model(const cv::Mat& model_img, const Model_Angles_t& angles, Model_Tables_t& rts, cv::Point& centroid );
 
-void compute_R_table(const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& pixel_on_edge);
-void compute_R_table(const cv::Mat& img, R_table_t& rt, cv::Point& centroid);
+void compute_R_table(const std::vector< cv::Point > &rotated_corners, const cv::Mat& gradient_norm, const cv::Mat& gradient_phase_radians, R_table_t& rt, cv::Point& centroid, std::vector<cv::Point>& pixel_on_edge);
+void compute_R_table(const cv::Mat& img, const std::vector< cv::Point > &rotated_corners, R_table_t& rt, cv::Point& centroid);
 void draw_R_table_sample(cv::Mat& img, const cv::Mat& gradient_phase_radians, const std::vector<cv::Point>& mask, size_t period, const cv::Point& centroid);
 
 
