@@ -29,7 +29,7 @@ int main( int argc, char **argv )
 
    // compute the angles for the model
    Model_Angles_t angles;
-   for ( int a = 0; a < 360; a += 45 )
+   for ( angle_t a = 0; a < 360; a += 45 )
    {
       angles.push_back(a);
    }
@@ -76,7 +76,7 @@ int main( int argc, char **argv )
    result_file << "# " << argv[1] << " " << argv[2] << "\n";
    result_file << "angle,votes,location_x,location_y\n";
    size_t i = 0;
-   size_t max_vote = 0;
+   vote_t max_vote = 0;
    cv::Point best_location;
    const size_t sz = 6;
    const cv::Scalar colors[sz] = {CV_RGB(255, 0, 0), CV_RGB(0, 255, 0), CV_RGB(0, 0, 255), CV_RGB(0, 255, 255), CV_RGB(255, 255, 0), CV_RGB(255, 0, 255)};
@@ -157,14 +157,14 @@ void search(locate_fun_t locate_fun, const cv::Mat &scene, const Model_Tables_t 
    }
 }
 
-void locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_on_edge, const cv::Mat &gradient_phase_radians, const R_table_t &rt, cv::Point &location, size_t &nvotes)
+void locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_on_edge, const cv::Mat &gradient_phase_radians, const R_table_t &rt, cv::Point &location, vote_t &nvotes)
 {
    cv::Mat accumulator = cv::Mat::zeros(scene_rows, scene_cols, cv::DataType<int>::type);
    for ( size_t i = 0; i < pixel_on_edge.size(); i++ )
    {
       // todo: avere gli angoli in gradi (quindi la conversione radianti -> gradi farla solo una volta)
       float angle = rad2deg(gradient_phase_radians.at<float>(pixel_on_edge[i].y, pixel_on_edge[i].x));
-      auto ret(rt.equal_range(static_cast<int>(angle)));
+      auto ret(rt.equal_range(round(angle)));
       for (R_table_t::const_iterator it1 = ret.first; it1 != ret.second; ++it1)
       {
          cv::Point candidate = it1->second + pixel_on_edge[i];
@@ -183,7 +183,7 @@ void locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_
 }
 
 #ifdef _WIN64
-void parallel_locate(int scene_rows,int scene_cols,const std::vector<cv::Point>& pixel_on_edge,const cv::Mat& gradient_phase_radians,const R_table_t& rt,cv::Point& location,size_t& nvotes)
+void parallel_locate(int scene_rows,int scene_cols,const std::vector<cv::Point>& pixel_on_edge,const cv::Mat& gradient_phase_radians,const R_table_t& rt,cv::Point& location, vote_t& nvotes)
 {
    typedef int acc_t;
    concurrency::combinable<cv::Mat> count([&scene_rows,&scene_cols]() { return cv::Mat::zeros(scene_rows,scene_cols,cv::DataType<acc_t>::type); });
@@ -191,7 +191,7 @@ void parallel_locate(int scene_rows,int scene_cols,const std::vector<cv::Point>&
       [&count,&gradient_phase_radians,&rt,&scene_rows,&scene_cols](cv::Point p)
    {
       float angle = rad2deg(gradient_phase_radians.at<float>(p.y,p.x));
-      auto ret(rt.equal_range(static_cast<int>(angle)));
+      auto ret(rt.equal_range(round(angle)));
       if (ret.first != ret.second){
          for (R_table_t::const_iterator it1=ret.first; it1!=ret.second; ++it1){
             cv::Point candidate = it1->second + p;
@@ -376,7 +376,7 @@ void compute_R_table(const std::vector< cv::Point > &rotated_corners, const cv::
    {
       float angle = rad2deg(gradient_phase_radians.at<float>(pixel_on_edge[i].y, pixel_on_edge[i].x));
       cv::Point r = centroid - pixel_on_edge[i];
-      rt.insert(std::make_pair(static_cast<int>(angle), r));
+      rt.insert(std::make_pair(round(angle), r));
    }
 }
 
@@ -458,7 +458,7 @@ void compute_model(const cv::Mat &model_img, const std::vector< int > &angles, s
 // Rotate the img about the point center, angle is in degree.
 // rotated is the rotated image, rotated_corners are the position of
 // the rotated corners of image.
-void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &rotated, std::vector< cv::Point > &rotated_corners )
+void rotate( const cv::Mat &img, const cv::Point &center, angle_t angle, cv::Mat &rotated, std::vector< cv::Point > &rotated_corners )
 {
    cv::Mat rot( 2, 3, cv::DataType<double>::type );
    rot = cv::getRotationMatrix2D( center, angle, 1 );
@@ -495,15 +495,15 @@ void rotate( const cv::Mat &img, const cv::Point &center, int angle, cv::Mat &ro
    cv::Mat bottom_left_rotated = rot * bottom_left;
    cv::Mat rotated_midpoint = rot * midpoint;
 
-   rotated_corners[0] = cv::Point(0.5 + top_left_rotated.at<double>(0, 0), 0.5 + top_left_rotated.at<double>(1, 0));
-   rotated_corners[1] = cv::Point(0.5 + top_right_rotated.at<double>(0, 0), 0.5 + top_right_rotated.at<double>(1, 0));
-   rotated_corners[2] = cv::Point(0.5 + bottom_right_rotated.at<double>(0, 0), 0.5 + bottom_right_rotated.at<double>(1, 0));
-   rotated_corners[3] = cv::Point(0.5 + bottom_left_rotated.at<double>(0, 0), 0.5 + bottom_left_rotated.at<double>(1, 0));
+   rotated_corners[0] = cv::Point(round(top_left_rotated.at<double>(0, 0)),round(top_left_rotated.at<double>(1, 0)));
+   rotated_corners[1] = cv::Point(round(top_right_rotated.at<double>(0, 0)), round(top_right_rotated.at<double>(1, 0)));
+   rotated_corners[2] = cv::Point(round(bottom_right_rotated.at<double>(0, 0)), round(bottom_right_rotated.at<double>(1, 0)));
+   rotated_corners[3] = cv::Point(round(bottom_left_rotated.at<double>(0, 0)), round(bottom_left_rotated.at<double>(1, 0)));
 
    cv::Rect bb( cv::boundingRect( rotated_corners ) );
    cv::Size sz(bb.width, bb.height);
 
-   cv::Point displacement(0.5 + bb.width / 2.0 - rotated_midpoint.at<double>(0, 0), 0.5 + bb.height / 2.0 - rotated_midpoint.at<double>(1, 0));
+   cv::Point displacement(round(bb.width / 2.0 - rotated_midpoint.at<double>(0, 0)), round(bb.height / 2.0 - rotated_midpoint.at<double>(1, 0)));
 
    rot.at<double>(0, 2) += displacement.x;
    rot.at<double>(1, 2) += displacement.y;
