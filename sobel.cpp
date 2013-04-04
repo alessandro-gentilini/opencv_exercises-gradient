@@ -35,7 +35,7 @@ int main( int argc, char **argv )
    }
 
    // compute the model
-   std::vector< R_table_t > rts;
+   Model_Tables_t rts;
    cv::Point centroid;
    compute_model(model_img, angles, rts, centroid);
 
@@ -143,10 +143,10 @@ void locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_
    {
       // todo: avere gli angoli in gradi (quindi la conversione radianti -> gradi farla solo una volta)
       float angle = rad2deg(gradient_phase_radians.at<float>(pixel_on_edge[i].y, pixel_on_edge[i].x));
-      auto ret(rt.equal_range(round(angle)));
-      for (R_table_t::const_iterator it1 = ret.first; it1 != ret.second; ++it1)
+      auto range(rt.equal_range(round(angle)));
+      for (auto it = range.first; it != range.second; ++it)
       {
-         cv::Point candidate = it1->second + pixel_on_edge[i];
+         cv::Point candidate = it->second + pixel_on_edge[i];
          if (candidate.y >= 0 && candidate.y < accumulator.rows && candidate.x >= 0 && candidate.x < accumulator.cols)
          {
             accumulator.at<int>(candidate.y, candidate.x)++;
@@ -162,30 +162,33 @@ void locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_
 }
 
 #ifdef _WIN64
-void parallel_locate(int scene_rows,int scene_cols,const std::vector<cv::Point>& pixel_on_edge,const cv::Mat& gradient_phase_radians,const R_table_t& rt,cv::Point& location, vote_t& nvotes)
+void parallel_locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_on_edge, const cv::Mat &gradient_phase_radians, const R_table_t &rt, cv::Point &location, vote_t &nvotes)
 {
-   typedef int acc_t;
-   concurrency::combinable<cv::Mat> count([&scene_rows,&scene_cols]() { return cv::Mat::zeros(scene_rows,scene_cols,cv::DataType<acc_t>::type); });
-   concurrency::parallel_for_each(pixel_on_edge.cbegin(), pixel_on_edge.cend(),
-      [&count,&gradient_phase_radians,&rt,&scene_rows,&scene_cols](cv::Point p)
-   {
-      float angle = rad2deg(gradient_phase_radians.at<float>(p.y,p.x));
-      auto ret(rt.equal_range(round(angle)));
-      if (ret.first != ret.second){
-         for (R_table_t::const_iterator it1=ret.first; it1!=ret.second; ++it1){
-            cv::Point candidate = it1->second + p;
-            if ( candidate.y >= 0 &&  candidate.y<scene_rows && candidate.x >= 0 && candidate.x<scene_cols) {
-               count.local().at<acc_t>(candidate.y,candidate.x)++;
+    typedef int acc_t;
+    concurrency::combinable<cv::Mat> count([&scene_rows, &scene_cols]()
+    {
+        return cv::Mat::zeros(scene_rows, scene_cols, cv::DataType<acc_t>::type);
+    });
+    concurrency::parallel_for_each(pixel_on_edge.cbegin(), pixel_on_edge.cend(),
+                                   [&count, &gradient_phase_radians, &rt, &scene_rows, &scene_cols](cv::Point p)
+    {
+        float angle = rad2deg(gradient_phase_radians.at<float>(p.y, p.x));
+        auto range(rt.equal_range(round(angle)));
+        for (auto it = range.first; it != range.second; ++it)
+        {
+            cv::Point candidate = it->second + p;
+            if ( candidate.y >= 0 &&  candidate.y < scene_rows && candidate.x >= 0 && candidate.x < scene_cols)
+            {
+                count.local().at<acc_t>(candidate.y, candidate.x)++;
             }
-         }    
-      }
-   });
+        }
+    });
 
-   double a_min,a_max;
-   cv::Point p_min,p_max;
-   cv::minMaxLoc(count.combine( opencv_mat_plus() ),&a_min,&a_max,&p_min,&p_max);
-   location = p_max;
-   nvotes = a_max;
+    double a_min, a_max;
+    cv::Point p_min, p_max;
+    cv::minMaxLoc(count.combine( opencv_mat_plus() ), &a_min, &a_max, &p_min, &p_max);
+    location = p_max;
+    nvotes = a_max;
 }
 #endif
 
@@ -383,13 +386,18 @@ void draw_R_table_sample(cv::Mat &img, const cv::Mat &gradient_phase_radians, co
 /// Operator for printing an R table
 std::ostream &operator<<(std::ostream &os, const R_table_t &rt)
 {
+   std::set< angle_t > angles;
+   for ( auto it = rt.begin(); it != rt.end(); ++it ) {
+      angles.insert(it->first);
+   }
+
    os << "gradient_phase,r_x,r_y\n";
-   for ( auto it = rt.begin(); it != rt.end(); ++it )
+   for ( auto it = angles.begin(); it != angles.end(); ++it )
    {
-      auto range(rt.equal_range(it->first));
+      auto range(rt.equal_range(*it));
       for ( auto jt = range.first; jt != range.second; ++jt )
       {
-         os << it->first << "," << jt->second.x << "," << jt->second.y << "\n";
+         os << *it << "," << jt->second.x << "," << jt->second.y << "\n";
       }
    }
    return os;
@@ -400,7 +408,7 @@ double distance(const cv::Point &a, const cv::Point &b)
    return sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
 }
 
-void compute_model(const cv::Mat &model_img, const std::vector< int > &angles, std::vector< R_table_t > &rts, cv::Point &centroid)
+void compute_model(const cv::Mat &model_img, const std::vector< int > &angles, Model_Tables_t &rts, cv::Point &centroid)
 {
    // clear the return values
    rts.clear();
@@ -540,3 +548,10 @@ void save_result(const char* filename,const char* model,const char* scene,const 
    }
    result_file.close();
 }
+
+
+bool Point_less(const cv::Point &lhs, const cv::Point &rhs)
+{
+   return std::tie(lhs.x,lhs.y) < std::tie(rhs.x,rhs.y);
+}
+
