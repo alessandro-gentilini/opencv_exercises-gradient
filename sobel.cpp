@@ -1,18 +1,5 @@
 // Alessandro Gentilini, 2013
 
-#ifdef _WIN64
-#define _USE_MATH_DEFINES 
-#include <ppl.h>
-#elif _WIN32
-//define something for Windows (32-bit)
-#elif __linux
-// linux
-#elif __unix // all unices not caught above
-// Unix
-#elif __posix
-// POSIX
-#endif
-
 #include "sobel.h"
 
 
