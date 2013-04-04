@@ -42,6 +42,8 @@ int main( int argc, char **argv )
    // save the 0 degree R table on file (for regression test)
    save_first_table("rt_0.csv",rts[0],argv[1],argv[2]);
 
+   save_model_stats(rts[0]);
+
    // end of model creation
 
 
@@ -553,5 +555,49 @@ void save_result(const char* filename,const char* model,const char* scene,const 
 bool Point_less(const cv::Point &lhs, const cv::Point &rhs)
 {
    return std::tie(lhs.x,lhs.y) < std::tie(rhs.x,rhs.y);
+}
+
+double norm( const cv::Point& p )
+{
+   return sqrt( p.x*p.x + p.y*p.y );
+}
+
+void save_model_stats(const R_table_t &rt)
+{
+    size_t n_super_m = rt.size();
+    std::set< angle_t > angles;
+    for ( auto it = rt.begin(); it != rt.end(); ++it )
+    {
+        angles.insert( it->first );
+    }
+
+    std::ofstream file("wf.csv");
+    file << "Delta_phi,eta\n";
+
+    double epsilon = 0.5;
+    double Delta_phi = 0.005;
+    double step = 0.005;
+    double max_Delta_phi = 3;
+
+    const size_t sz = max_Delta_phi/step;
+
+    for ( size_t i = 0; i < sz; i++ )
+    {
+        size_t cnt = 0;
+        for ( auto it = angles.begin(); it != angles.end(); ++it )
+        {
+            auto range( rt.equal_range( *it ) );
+            for ( auto jt = range.first; jt != range.second; ++jt )
+            {
+                if ( norm(jt->second) <= (2 * epsilon) / Delta_phi )
+                {
+                    cnt++;
+                }
+            }
+        }
+        file << Delta_phi << "," << static_cast<double>(cnt) / n_super_m << "\n";
+        Delta_phi += step;
+    }
+    file.close();
 }
 

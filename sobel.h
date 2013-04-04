@@ -58,7 +58,7 @@ void rotate( const cv::Mat &img, const cv::Point &center, angle_t angle, cv::Mat
 
 void save_first_table(const char *filename, const R_table_t &t, const char *model, const char *scene);
 void save_result(const char* filename,const char* model,const char* scene,const Locations_t& locations,const Votes_t& votes, cv::Mat& scene_img, cv::Point& best_location);
-void save_model_stats(const Model_Tables_t& rts);
+void save_model_stats(const R_table_t& rt);
 
 #ifdef _WIN64
 void parallel_locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_on_edge, const cv::Mat &gradient_phase_radians, const R_table_t &rt, cv::Point &location, vote_t &nvotes);
