@@ -40,10 +40,7 @@ int main( int argc, char **argv )
    compute_model(model_img, angles, rts, centroid);
 
    // save the 0 degree R table on file (for regression test)
-   std::ofstream rt_file("rt_0.csv");
-   rt_file << "# " << argv[1] << " " << argv[2] << "\n";
-   rt_file << rts[0];
-   rt_file.close();
+   save_first_table("rt_0.csv",rts[0],argv[1],argv[2]);
 
    // end of model creation
 
@@ -71,27 +68,9 @@ int main( int argc, char **argv )
    search( locate, scene, rts, angles, locations, votes );
 #endif
 
-   // save the results (for regression test)
-   std::ofstream result_file("result.csv");
-   result_file << "# " << argv[1] << " " << argv[2] << "\n";
-   result_file << "angle,votes,location_x,location_y\n";
-   size_t i = 0;
-   vote_t max_vote = 0;
    cv::Point best_location;
-   const size_t sz = 6;
-   const cv::Scalar colors[sz] = {CV_RGB(255, 0, 0), CV_RGB(0, 255, 0), CV_RGB(0, 0, 255), CV_RGB(0, 255, 255), CV_RGB(255, 255, 0), CV_RGB(255, 0, 255)};
-   for ( auto it = locations.begin(); it != locations.end(); ++it )
-   {
-      result_file << it->first << "," << votes[i] << "," << it->second.x << "," << it->second.y << "\n";
-      draw_cross(scene, it->second, 40, colors[i % sz]);
-      if ( votes[i] > max_vote )
-      {
-         best_location = it->second;
-         max_vote = votes[i];
-      }
-      i++;
-   }
-   result_file.close();
+   // save the results (for regression test)
+   save_result("result.csv",argv[1],argv[2],locations,votes,scene,best_location);
 
    // end of search
 
@@ -531,3 +510,33 @@ void create_a_model()
 
 
 
+void save_first_table(const char *filename, const R_table_t &t, const char *model, const char *scene)
+{
+   std::ofstream rt_file(filename);
+   rt_file << "# " << model << " " << scene << "\n";
+   rt_file << t;
+   rt_file.close();
+}
+
+void save_result(const char* filename,const char* model,const char* scene,const Locations_t& locations,const Votes_t& votes, cv::Mat& scene_img, cv::Point& best_location)
+{
+   std::ofstream result_file(filename);
+   result_file << "# " << model << " " << scene << "\n";
+   result_file << "angle,votes,location_x,location_y\n";
+   size_t i = 0;
+   vote_t max_vote = 0;
+   const size_t sz = 6;
+   const cv::Scalar colors[sz] = {CV_RGB(255, 0, 0), CV_RGB(0, 255, 0), CV_RGB(0, 0, 255), CV_RGB(0, 255, 255), CV_RGB(255, 255, 0), CV_RGB(255, 0, 255)};
+   for ( auto it = locations.begin(); it != locations.end(); ++it )
+   {
+      result_file << it->first << "," << votes[i] << "," << it->second.x << "," << it->second.y << "\n";
+      draw_cross(scene_img, it->second, 40, colors[i % sz]);
+      if ( votes[i] > max_vote )
+      {
+         best_location = it->second;
+         max_vote = votes[i];
+      }
+      i++;
+   }
+   result_file.close();
+}
