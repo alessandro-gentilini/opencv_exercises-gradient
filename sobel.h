@@ -29,6 +29,12 @@ T rad2deg( const T &r )
     return 180 * r / M_PI;
 }
 
+template< typename T >
+T deg2rad( const T &d )
+{
+    return M_PI * d / 180;
+}
+
 typedef int angle_t;
 typedef size_t vote_t;
 
@@ -62,4 +68,5 @@ void save_model_stats(const R_table_t& rt);
 
 #ifdef _WIN64
 void parallel_locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_on_edge, const cv::Mat &gradient_phase_radians, const R_table_t &rt, cv::Point &location, vote_t &nvotes);
+float round(float v){return (v > 0.0) ? floor(v + 0.5) : ceil(v - 0.5);}
 #endif

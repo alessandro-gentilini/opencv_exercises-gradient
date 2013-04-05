@@ -575,9 +575,9 @@ void save_model_stats(const R_table_t &rt)
     file << "Delta_phi,eta\n";
 
     double epsilon = 0.5;
-    double Delta_phi = 0.005;
-    double step = 0.005;
-    double max_Delta_phi = 3;
+    double Delta_phi = deg2rad(0.1);
+    double step = deg2rad(0.1);
+    double max_Delta_phi = deg2rad(3.0);
 
     const size_t sz = max_Delta_phi/step;
 
@@ -595,7 +595,7 @@ void save_model_stats(const R_table_t &rt)
                 }
             }
         }
-        file << Delta_phi << "," << static_cast<double>(cnt) / n_super_m << "\n";
+        file << rad2deg(Delta_phi) << "," << static_cast<double>(cnt) / n_super_m << "\n";
         Delta_phi += step;
     }
     file.close();
