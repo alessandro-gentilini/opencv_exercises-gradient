@@ -5,89 +5,97 @@
 
 struct opencv_mat_plus
 {
-   cv::Mat operator()(const cv::Mat& m1, const cv::Mat& m2) const
-   {
-      return m1 + m2;
-   }
+    cv::Mat operator()(const cv::Mat &m1, const cv::Mat &m2) const
+    {
+        return m1 + m2;
+    }
 };
 
 bool show_dbg_img;
+bool save_regression_data;
 
 int main( int argc, char **argv )
 {
-   show_dbg_img = argc == 4;
+    show_dbg_img = argc >= 4 && argv[3] == std::string("1");
+    save_regression_data = argc >= 5 && argv[4] == std::string("1");
 
-   // begin of model creation
+    // begin of model creation
 
-   // read the model image
-   cv::Mat model_img = cv::imread( argv[1] );
-   if ( !model_img.data )
-   {
-      std::cerr << "Error loading model image: " << argv[1] << "\n";
-      return 1;
-   }
+    // read the model image
+    cv::Mat model_img = cv::imread( argv[1] );
+    if ( !model_img.data )
+    {
+        std::cerr << "Error loading model image: " << argv[1] << "\n";
+        return 1;
+    }
 
-   // compute the angles for the model
-   Model_Angles_t angles;
-   for ( angle_t a = 0; a < 360; a += 45 )
-   {
-      angles.push_back(a);
-   }
+    // compute the angles for the model
+    Model_Angles_t angles;
+    for ( angle_t a = 0; a < 360; a += 45 )
+    {
+        angles.push_back(a);
+    }
 
-   // compute the model
-   Model_Tables_t rts;
-   cv::Point centroid;
-   compute_model(model_img, angles, rts, centroid);
+    // compute the model
+    Model_Tables_t rts;
+    cv::Point centroid;
+    compute_model(model_img, angles, rts, centroid);
 
-   // save the 0 degree R table on file (for regression test)
-   save_first_table("rt_0.csv",rts[0],argv[1],argv[2]);
+    if ( save_regression_data )
+    {
+        // save the 0 degree R table on file (for regression test)
+        save_first_table("rt_0.csv", rts[0], argv[1], argv[2]);
 
-   save_model_stats(rts[0]);
+        save_model_stats(rts[0]);
+    }
 
-   // end of model creation
-
-
-   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // end of model creation
 
 
-   // begin of model search inside the scene image
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-   // read the scene image
-   cv::Mat scene(cv::imread( argv[2] ));
-   if ( !scene.data )
-   {
-      std::cerr << "Error loading scene image: " << argv[2] << "\n";
-      return 1;
-   }
 
-   // search the model inside the scene
-   Locations_t locations;
-   Votes_t votes;
+    // begin of model search inside the scene image
+
+    // read the scene image
+    cv::Mat scene(cv::imread( argv[2] ));
+    if ( !scene.data )
+    {
+        std::cerr << "Error loading scene image: " << argv[2] << "\n";
+        return 1;
+    }
+
+    // search the model inside the scene
+    Locations_t locations;
+    Votes_t votes;
 
 #ifdef _WIN64
-   search( parallel_locate, scene, rts, angles, locations, votes );
+    search( parallel_locate, scene, rts, angles, locations, votes );
 #else
-   search( locate, scene, rts, angles, locations, votes );
+    search( locate, scene, rts, angles, locations, votes );
 #endif
 
-   cv::Point best_location;
-   // save the results (for regression test)
-   save_result("result.csv",argv[1],argv[2],locations,votes,scene,best_location);
+    cv::Point best_location;
+    if ( save_regression_data )
+    {
+        // save the results (for regression test)
+        save_result("result.csv", argv[1], argv[2], locations, votes, scene, best_location);
+    }
 
-   // end of search
+    // end of search
 
-   if ( show_dbg_img )
-   {
-      draw_cross(model_img, centroid, 40, CV_RGB(255, 0, 0));
-      cv::imshow("model", model_img);
-      cv::imwrite("model.bmp", model_img);
-      draw_cross_45(scene, best_location, 40, CV_RGB(255, 0, 0));
-      cv::imshow("scene", scene);
-      cv::imwrite("scene.bmp", scene);
-      cv::waitKey();
-   }
+    if ( show_dbg_img )
+    {
+        draw_cross(model_img, centroid, 40, CV_RGB(255, 0, 0));
+        cv::imshow("model", model_img);
+        cv::imwrite("model.bmp", model_img);
+        draw_cross_45(scene, best_location, 40, CV_RGB(255, 0, 0));
+        cv::imshow("scene", scene);
+        cv::imwrite("scene.bmp", scene);
+        cv::waitKey();
+    }
 
-   return 0;
+    return 0;
 }
 
 // Search for the model inside the scene.
