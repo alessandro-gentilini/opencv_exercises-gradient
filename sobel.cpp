@@ -11,8 +11,8 @@ struct opencv_mat_plus
     }
 };
 
-bool show_dbg_img;
-bool save_regression_data;
+bool show_dbg_img = false;
+bool save_regression_data = false;
 
 int main( int argc, char **argv )
 {
