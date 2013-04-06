@@ -1,4 +1,4 @@
-# test_model.bmp test_scene.bmp
+# ./img/test_model.bmp ./img/test_scene.bmp
 angle,votes,location_x,location_y
 0,416,50,186
 45,655,68,69

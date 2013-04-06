@@ -1,4 +1,4 @@
-# test_model.bmp test_scene.bmp
+# ./img/test_model.bmp ./img/test_scene.bmp
 gradient_phase,r_x,r_y
 0,15,12
 0,15,11
