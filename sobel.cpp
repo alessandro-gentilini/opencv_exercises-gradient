@@ -412,36 +412,39 @@ double distance(const cv::Point &a, const cv::Point &b)
 
 void compute_model(const cv::Mat &model_img, const std::vector< int > &angles, Model_Tables_t &rts, cv::Point &centroid)
 {
-   // clear the return values
-   rts.clear();
+    // clear the return values
+    rts.clear();
 
-   // compute the R table for angle 0, to get an initial value for the centroid
-   R_table_t rt0;
-   std::vector< cv::Point > rotated_corners(4);
-   rotated_corners[0] = cv::Point(0, 0);
-   rotated_corners[1] = cv::Point(model_img.cols - 1, 0);
-   rotated_corners[2] = cv::Point(model_img.cols - 1, model_img.rows - 1);
-   rotated_corners[3] = cv::Point(0, model_img.rows - 1);
-   compute_R_table(model_img, rotated_corners, rt0, centroid);
+    // compute the R table for angle 0, to get an initial value for the centroid
+    R_table_t rt0;
+    std::vector< cv::Point > rotated_corners(4);
+    rotated_corners[0] = cv::Point(0, 0);
+    rotated_corners[1] = cv::Point(model_img.cols - 1, 0);
+    rotated_corners[2] = cv::Point(model_img.cols - 1, model_img.rows - 1);
+    rotated_corners[3] = cv::Point(0, model_img.rows - 1);
+    compute_R_table(model_img, rotated_corners, rt0, centroid);
 
-   // compute the R tables for various model orientation
-   for ( size_t i = 0; i < angles.size(); i++ )
-   {
-      cv::Mat rotated;
-      std::vector< cv::Point > rotated_corners(4);
-      rotate( model_img, centroid, angles[i], rotated, rotated_corners );
+    // compute the R tables for various model orientation
+    for ( size_t i = 0; i < angles.size(); i++ )
+    {
+        cv::Mat rotated;
+        std::vector< cv::Point > rotated_corners(4);
+        rotate( model_img, centroid, angles[i], rotated, rotated_corners );
 
-      // save the rotated model image
-      std::ostringstream name;
-      name << "rotated" << angles[i] << ".bmp";
-      cv::imwrite(name.str(), rotated);
+        if ( show_dbg_img )
+        {
+            // save the rotated model image
+            std::ostringstream name;
+            name << "rotated" << angles[i] << ".bmp";
+            cv::imwrite(name.str(), rotated);
+        }
 
-      // compute the R table for the rotated model image
-      R_table_t rt;
-      cv::Point dont_care;
-      compute_R_table(rotated, rotated_corners, rt, dont_care);
-      rts.push_back(rt);
-   }
+        // compute the R table for the rotated model image
+        R_table_t rt;
+        cv::Point dont_care;
+        compute_R_table(rotated, rotated_corners, rt, dont_care);
+        rts.push_back(rt);
+    }
 }
 
 // Rotate the img about the point center, angle is in degree.
