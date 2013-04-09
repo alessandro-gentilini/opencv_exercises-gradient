@@ -40,7 +40,7 @@ typedef size_t vote_t;
 
 typedef std::map<angle_t, cv::Point> Locations_t;
 typedef std::vector< vote_t > Votes_t;
-typedef std::multimap<angle_t, cv::Point> R_table_t;
+typedef std::vector< std::vector<cv::Point> > R_table_t;
 typedef std::vector< R_table_t > Model_Tables_t;
 typedef std::vector< angle_t > Model_Angles_t;
 typedef void (*locate_fun_t)(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_on_edge, const cv::Mat &gradient_phase_radians, const R_table_t &rt, cv::Point &location, vote_t &nvotes);
