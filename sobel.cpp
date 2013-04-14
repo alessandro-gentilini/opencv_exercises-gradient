@@ -29,6 +29,8 @@ int main( int argc, char **argv )
         return 1;
     }
 
+    pyramid_stuff(model_img);
+
     // compute the angles for the model
     Model_Angles_t angles;
     for ( angle_t a = 0; a < 360; a += 45 )
@@ -96,6 +98,18 @@ int main( int argc, char **argv )
     }
 
     return 0;
+}
+
+void pyramid_stuff(const cv::Mat &img)
+{
+    std::vector< cv::Mat > pyramid;
+    cv::buildPyramid(img, pyramid, std::log2(std::min(img.rows, img.cols)));
+    for ( size_t i = 0; i < pyramid.size(); i++ )
+    {
+        std::ostringstream oss;
+        oss << "pyr_" << i << ".bmp";
+        cv::imwrite(oss.str().c_str(), pyramid[i]);
+    }
 }
 
 // Search for the model inside the scene.
@@ -317,14 +331,16 @@ void compute_R_table(const cv::Mat &img, const std::vector< cv::Point > &rotated
     compute_R_table(rotated_corners, L2_gradient_magnitude, phi_radian, rt, centroid, pixel_on_edge);
 }
 
-void compute_R_table(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, const cv::Mat &gradient_phase_radians, R_table_t &rt, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge)
+// Compute the edges from the gradient magnitude image.
+// gradient_norm is the gradient magnitude image
+// rotated_corners are the corners of a polygon containing the meaningful part of the gradient magnitude
+// centroid will contain the computed centroid
+// pixel_on_edge will contain the collection of pixel coordinates that belong to edges
+void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge)
 {
-    rt.resize(360);
     pixel_on_edge.clear();
-
     cv::Mat mag_bin;
     cv::threshold(gradient_norm, mag_bin, 128, 255, cv::THRESH_BINARY);
-
     centroid = cv::Point(0, 0);
     for ( int x = 0; x < mag_bin.cols; x += 1 ) //15
     {
@@ -364,6 +380,13 @@ void compute_R_table(const std::vector< cv::Point > &rotated_corners, const cv::
 
     centroid.x /= pixel_on_edge.size();
     centroid.y /= pixel_on_edge.size();
+}
+
+void compute_R_table(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, const cv::Mat &gradient_phase_radians, R_table_t &rt, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge)
+{
+    rt.resize(360);
+
+    compute_edges(rotated_corners, gradient_norm, centroid, pixel_on_edge);
 
     const size_t sz = rt.size();
     for ( size_t i = 0; i < pixel_on_edge.size(); i++ )
