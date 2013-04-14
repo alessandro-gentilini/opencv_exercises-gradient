@@ -102,6 +102,8 @@ void pyramid_stuff(const cv::Mat &img, const std::vector<cv::Point> &rotated_cor
 {
     std::vector< cv::Mat > pyramid;
     cv::buildPyramid(img, pyramid, std::log2(std::min(img.rows, img.cols)));
+
+    std::vector< cv::Point > original_size_edges;
     for ( size_t i = 0; i < pyramid.size(); i++ )
     {
         std::ostringstream oss;
@@ -115,12 +117,42 @@ void pyramid_stuff(const cv::Mat &img, const std::vector<cv::Point> &rotated_cor
         cv::Point centroid;
         std::vector< cv::Point > pixel_on_edge;
         std::vector< cv::Point > scaled_rotated_corners;
-        std::transform(rotated_corners.begin(), rotated_corners.end(), std::back_inserter(scaled_rotated_corners), [&i](const cv::Point & p)
+        double scale_factor = pow(2, i);
+        std::transform(rotated_corners.begin(), rotated_corners.end(), std::back_inserter(scaled_rotated_corners), [&i, &scale_factor](const cv::Point & p)
         {
-            double f = pow(2,i);
-            return cv::Point(p.x/f,p.y/f);
+            return cv::Point(p.x / scale_factor, p.y / scale_factor);
         });
-        compute_edges(scaled_rotated_corners, L2_gradient_magnitude, centroid, pixel_on_edge, oss.str());
+        cv::Mat mag_bin;
+        compute_edges(scaled_rotated_corners, L2_gradient_magnitude, centroid, pixel_on_edge, mag_bin, oss.str());
+
+        if ( i == 0 ) {
+            original_size_edges = pixel_on_edge;
+        }
+
+        cv::Mat upsampled = mag_bin;
+        for ( size_t j = 0; j < i; j++ ) {
+            cv::pyrUp(upsampled, upsampled );
+        }
+        // The upsample started from mag_bin which was a binary image, so theoretically all the nonzero pixels in upsampled are needed, but I set for an higher threshold
+        cv::threshold(upsampled, upsampled, 128, 255, cv::THRESH_BINARY);
+
+        cv::Mat d_upsampled(upsampled.rows,upsampled.cols,cv::DataType<double>::type);
+        cv::distanceTransform(upsampled,d_upsampled,CV_DIST_L2,CV_DIST_MASK_PRECISE);
+
+        double score = 0;
+        for ( size_t p = 0; p < original_size_edges.size(); p++ ) {
+            score += d_upsampled.at<double>(original_size_edges[p].y,original_size_edges[p].x);
+        }
+
+        std::cout << "level=" << i << "\tscore=" << score << "\n";
+
+        std::ostringstream oss1;
+        oss1 << "up_" << i << ".bmp";
+        cv::imwrite(oss1.str(),upsampled);
+
+        std::ostringstream oss2;
+        oss2 << "upd_" << i << ".bmp";
+        cv::imwrite(oss2.str(),d_upsampled);        
     }
 }
 
@@ -348,10 +380,10 @@ void compute_R_table(const cv::Mat &img, const std::vector< cv::Point > &rotated
 // rotated_corners are the corners of a polygon containing the meaningful part of the gradient magnitude
 // centroid will contain the computed centroid
 // pixel_on_edge will contain the collection of pixel coordinates that belong to edges
-void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge, const std::string &idx)
+void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge, cv::Mat& mag_bin, const std::string &idx)
 {
     pixel_on_edge.clear();
-    cv::Mat mag_bin;
+
     cv::threshold(gradient_norm, mag_bin, 128, 255, cv::THRESH_BINARY);
     centroid = cv::Point(0, 0);
     for ( int x = 0; x < mag_bin.cols; x += 1 ) //15
@@ -394,7 +426,8 @@ void compute_R_table(const std::vector< cv::Point > &rotated_corners, const cv::
 {
     rt.resize(360);
 
-    compute_edges(rotated_corners, gradient_norm, centroid, pixel_on_edge, "RT");
+    cv::Mat dont_care;
+    compute_edges(rotated_corners, gradient_norm, centroid, pixel_on_edge, dont_care, "RT");
 
     const size_t sz = rt.size();
     for ( size_t i = 0; i < pixel_on_edge.size(); i++ )
