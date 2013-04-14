@@ -1,4 +1,4 @@
-// Alessandro Gentilini, 2013
+// Copyright Alessandro Gentilini, 2013
 
 #include "sobel.h"
 
@@ -360,7 +360,7 @@ void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Ma
         {
             cv::Point query(x, y);
             // I use the polygon test to exclude pixels that are on the false edge due to rotation
-            if ( cv::pointPolygonTest(rotated_corners, query, true) >= 2 && mag_bin.at<unsigned char>(y, x) == 255)
+            if ( cv::pointPolygonTest(rotated_corners, query, true) >= 3 && mag_bin.at<unsigned char>(y, x) == 255)
             {
                 cv::Point p(x, y);
                 pixel_on_edge.push_back(p);
