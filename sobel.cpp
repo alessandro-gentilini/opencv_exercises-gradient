@@ -29,8 +29,6 @@ int main( int argc, char **argv )
         return 1;
     }
 
-    pyramid_stuff(model_img);
-
     // compute the angles for the model
     Model_Angles_t angles;
     for ( angle_t a = 0; a < 360; a += 45 )
@@ -100,7 +98,7 @@ int main( int argc, char **argv )
     return 0;
 }
 
-void pyramid_stuff(const cv::Mat &img)
+void pyramid_stuff(const cv::Mat &img, const std::vector<cv::Point> &rotated_corners)
 {
     std::vector< cv::Mat > pyramid;
     cv::buildPyramid(img, pyramid, std::log2(std::min(img.rows, img.cols)));
@@ -109,6 +107,20 @@ void pyramid_stuff(const cv::Mat &img)
         std::ostringstream oss;
         oss << "pyr_" << i << ".bmp";
         cv::imwrite(oss.str().c_str(), pyramid[i]);
+
+        cv::Mat L2_gradient_magnitude;
+        gradient_L2_norm(pyramid[i], L2_gradient_magnitude);
+        cv::convertScaleAbs(L2_gradient_magnitude, L2_gradient_magnitude);
+
+        cv::Point centroid;
+        std::vector< cv::Point > pixel_on_edge;
+        std::vector< cv::Point > scaled_rotated_corners;
+        std::transform(rotated_corners.begin(), rotated_corners.end(), std::back_inserter(scaled_rotated_corners), [&i](const cv::Point & p)
+        {
+            double f = pow(2,i);
+            return cv::Point(p.x/f,p.y/f);
+        });
+        compute_edges(scaled_rotated_corners, L2_gradient_magnitude, centroid, pixel_on_edge, oss.str());
     }
 }
 
@@ -336,7 +348,7 @@ void compute_R_table(const cv::Mat &img, const std::vector< cv::Point > &rotated
 // rotated_corners are the corners of a polygon containing the meaningful part of the gradient magnitude
 // centroid will contain the computed centroid
 // pixel_on_edge will contain the collection of pixel coordinates that belong to edges
-void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge)
+void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge, const std::string &idx)
 {
     pixel_on_edge.clear();
     cv::Mat mag_bin;
@@ -363,8 +375,6 @@ void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Ma
 
     if ( show_dbg_img )
     {
-        static int idx = 0;
-
         std::ostringstream name_1;
         name_1 << idx << "_gradient_norm";
         imshow(name_1.str(), gradient_norm);
@@ -372,8 +382,6 @@ void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Ma
         std::ostringstream name_2;
         name_2 << idx << "_filtered_gradient_norm";
         imshow(name_2.str(), mag_bin);
-
-        idx++;
     }
 
     if ( pixel_on_edge.empty() ) return;
@@ -386,7 +394,7 @@ void compute_R_table(const std::vector< cv::Point > &rotated_corners, const cv::
 {
     rt.resize(360);
 
-    compute_edges(rotated_corners, gradient_norm, centroid, pixel_on_edge);
+    compute_edges(rotated_corners, gradient_norm, centroid, pixel_on_edge, "RT");
 
     const size_t sz = rt.size();
     for ( size_t i = 0; i < pixel_on_edge.size(); i++ )
@@ -473,6 +481,8 @@ void compute_model(const cv::Mat &model_img, const std::vector< int > &angles, M
         cv::Point dont_care;
         compute_R_table(rotated, rotated_corners, rt, dont_care);
         rts.push_back(rt);
+
+        pyramid_stuff(rotated, rotated_corners);
     }
 }
 

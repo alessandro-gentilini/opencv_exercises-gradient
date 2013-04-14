@@ -53,8 +53,8 @@ void gradient_phase(const cv::Mat &img, cv::Mat &phase, bool is_degree );
 
 std::ostream &operator<<(std::ostream &os, const R_table_t &rt);
 
-void pyramid_stuff(const cv::Mat &img);
-void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge);
+void pyramid_stuff(const cv::Mat &img, const std::vector<cv::Point>& rotated_corners);
+void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge,const std::string& idx);
 void compute_model(const cv::Mat &model_img, const Model_Angles_t &angles, Model_Tables_t &rts, cv::Point &centroid );
 void compute_R_table(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, const cv::Mat &gradient_phase_radians, R_table_t &rt, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge);
 void compute_R_table(const cv::Mat &img, const std::vector< cv::Point > &rotated_corners, R_table_t &rt, cv::Point &centroid);
