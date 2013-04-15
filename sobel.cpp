@@ -215,7 +215,7 @@ void locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_
         const size_t sz = rt[((int)round(angle) % rt_sz)].size();
         for (size_t it = 0; it < sz; ++it)
         {
-            cv::Point candidate = rt[((int)round(angle)) % rt_sz].at(it) + pixel_on_edge[i];
+         cv::Point candidate = rt[((int)round(angle)) % rt_sz][it] + pixel_on_edge[i];
             if (candidate.y >= 0 && candidate.y < accumulator.rows && candidate.x >= 0 && candidate.x < accumulator.cols)
             {
                 accumulator.at<int>(candidate.y, candidate.x)++;
@@ -233,19 +233,20 @@ void locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_
 #ifdef _WIN64
 void parallel_locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_on_edge, const cv::Mat &gradient_phase_radians, const R_table_t &rt, cv::Point &location, vote_t &nvotes)
 {
+   const size_t  rt_sz = rt.size();
     typedef int acc_t;
     concurrency::combinable<cv::Mat> count([&scene_rows, &scene_cols]()
     {
         return cv::Mat::zeros(scene_rows, scene_cols, cv::DataType<acc_t>::type);
     });
     concurrency::parallel_for_each(pixel_on_edge.cbegin(), pixel_on_edge.cend(),
-                                   [&count, &gradient_phase_radians, &rt, &scene_rows, &scene_cols](cv::Point p)
+      [&count, &gradient_phase_radians, &rt, &scene_rows, &scene_cols, &rt_sz](cv::Point p)
     {
         float angle = rad2deg(gradient_phase_radians.at<float>(p.y, p.x));
-        auto range(rt.equal_range(round(angle)));
-        for (auto it = range.first; it != range.second; ++it)
+      const size_t sz = rt[((int)round(angle) % rt_sz)].size();
+      for (size_t it = 0; it < sz; ++it)
         {
-            cv::Point candidate = it->second + p;
+         cv::Point candidate = rt[((int)round(angle)) % rt_sz][it] + p;
             if ( candidate.y >= 0 &&  candidate.y < scene_rows && candidate.x >= 0 && candidate.x < scene_cols)
             {
                 count.local().at<acc_t>(candidate.y, candidate.x)++;
@@ -639,7 +640,15 @@ double norm( const cv::Point &p )
 
 void save_model_stats(const R_table_t &rt)
 {
-    size_t n_super_m = rt.size();
+   const size_t rt_sz = rt.size();
+
+   size_t n_super_m = 0;
+   for ( size_t i = 0; i < rt_sz; i++ ) {
+      const size_t current_angle_sz = rt[i].size();
+      for ( size_t j = 0; j < current_angle_sz; j++ ) {
+         n_super_m++;
+      }
+   }
 
     std::ofstream file("wf.csv");
     file << "Delta_phi,eta\n";
@@ -650,7 +659,6 @@ void save_model_stats(const R_table_t &rt)
     double max_Delta_phi = deg2rad(3.0);
 
     const size_t sz = max_Delta_phi / step;
-    const size_t rt_sz = rt.size();
     for ( size_t i = 0; i < sz; i++ )
     {
         size_t cnt = 0;
