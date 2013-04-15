@@ -104,6 +104,8 @@ void pyramid_stuff(const cv::Mat &img, const std::vector<cv::Point> &rotated_cor
     cv::buildPyramid(img, pyramid, std::log2(std::min(img.rows, img.cols)));
 
     std::vector< cv::Point > original_size_edges;
+    double area = 0;
+    std::vector< cv::Point > hull;
     for ( size_t i = 0; i < pyramid.size(); i++ )
     {
         std::ostringstream oss;
@@ -125,34 +127,55 @@ void pyramid_stuff(const cv::Mat &img, const std::vector<cv::Point> &rotated_cor
         cv::Mat mag_bin;
         compute_edges(scaled_rotated_corners, L2_gradient_magnitude, centroid, pixel_on_edge, mag_bin, oss.str());
 
-        if ( i == 0 ) {
+        if ( i == 0 )
+        {
             original_size_edges = pixel_on_edge;
+            cv::convexHull(original_size_edges,hull);
+            area = cv::contourArea(hull);
         }
 
         cv::Mat upsampled = mag_bin;
-        for ( size_t j = 0; j < i; j++ ) {
+        for ( size_t j = 0; j < i; j++ )
+        {
             cv::pyrUp(upsampled, upsampled );
         }
         // The upsample started from mag_bin which was a binary image, so theoretically all the nonzero pixels in upsampled are needed, but I set for an higher threshold
         cv::threshold(upsampled, upsampled, 128, 255, cv::THRESH_BINARY);
 
-        cv::Mat d_upsampled(upsampled.rows,upsampled.cols,cv::DataType<double>::type);
-        cv::distanceTransform(upsampled,d_upsampled,CV_DIST_L2,CV_DIST_MASK_PRECISE);
+        // 4.1.1.2 The edge pixels have a value of zero.
+        upsampled = 255 - upsampled;
 
+        double a_min, a_max;
+        cv::Point p_min, p_max;
+        cv::minMaxLoc(upsampled, &a_min, &a_max, &p_min, &p_max);
+
+        // distance transform is meaningless if no pixel is zero
+        if ( a_min != 0 ) continue;
+
+        assert(cv::DataType<float>::type == CV_32FC1);
+        cv::Mat d_upsampled(upsampled.rows, upsampled.cols, cv::DataType<float>::type);
+        cv::distanceTransform(upsampled, d_upsampled, CV_DIST_L2, CV_DIST_MASK_PRECISE);
+
+        std::ostringstream oss0;
+        oss0 << "dist_" << i << ".csv";
+        std::ofstream ofs(oss0.str().c_str()) ;
         double score = 0;
-        for ( size_t p = 0; p < original_size_edges.size(); p++ ) {
-            score += d_upsampled.at<double>(original_size_edges[p].y,original_size_edges[p].x);
+        for ( size_t p = 0; p < original_size_edges.size(); p++ )
+        {
+            score += d_upsampled.at<float>(original_size_edges[p].y, original_size_edges[p].x);
+            ofs << score << "\n";
         }
+        ofs.close();
 
-        std::cout << "level=" << i << "\tscore=" << score << "\n";
+        std::cout << "level=" << i << "\tscore=" << score << "\tpercent=" << 100*score/area << "\n";
 
         std::ostringstream oss1;
         oss1 << "up_" << i << ".bmp";
-        cv::imwrite(oss1.str(),upsampled);
+        cv::imwrite(oss1.str(), upsampled);
 
         std::ostringstream oss2;
         oss2 << "upd_" << i << ".bmp";
-        cv::imwrite(oss2.str(),d_upsampled);        
+        cv::imwrite(oss2.str(), d_upsampled);
     }
 }
 
@@ -215,7 +238,7 @@ void locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_
         const size_t sz = rt[((int)round(angle) % rt_sz)].size();
         for (size_t it = 0; it < sz; ++it)
         {
-         cv::Point candidate = rt[((int)round(angle)) % rt_sz][it] + pixel_on_edge[i];
+            cv::Point candidate = rt[((int)round(angle)) % rt_sz][it] + pixel_on_edge[i];
             if (candidate.y >= 0 && candidate.y < accumulator.rows && candidate.x >= 0 && candidate.x < accumulator.cols)
             {
                 accumulator.at<int>(candidate.y, candidate.x)++;
@@ -233,20 +256,20 @@ void locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_
 #ifdef _WIN64
 void parallel_locate(int scene_rows, int scene_cols, const std::vector<cv::Point> &pixel_on_edge, const cv::Mat &gradient_phase_radians, const R_table_t &rt, cv::Point &location, vote_t &nvotes)
 {
-   const size_t  rt_sz = rt.size();
+    const size_t  rt_sz = rt.size();
     typedef int acc_t;
     concurrency::combinable<cv::Mat> count([&scene_rows, &scene_cols]()
     {
         return cv::Mat::zeros(scene_rows, scene_cols, cv::DataType<acc_t>::type);
     });
     concurrency::parallel_for_each(pixel_on_edge.cbegin(), pixel_on_edge.cend(),
-      [&count, &gradient_phase_radians, &rt, &scene_rows, &scene_cols, &rt_sz](cv::Point p)
+                                   [&count, &gradient_phase_radians, &rt, &scene_rows, &scene_cols, &rt_sz](cv::Point p)
     {
         float angle = rad2deg(gradient_phase_radians.at<float>(p.y, p.x));
-      const size_t sz = rt[((int)round(angle) % rt_sz)].size();
-      for (size_t it = 0; it < sz; ++it)
+        const size_t sz = rt[((int)round(angle) % rt_sz)].size();
+        for (size_t it = 0; it < sz; ++it)
         {
-         cv::Point candidate = rt[((int)round(angle)) % rt_sz][it] + p;
+            cv::Point candidate = rt[((int)round(angle)) % rt_sz][it] + p;
             if ( candidate.y >= 0 &&  candidate.y < scene_rows && candidate.x >= 0 && candidate.x < scene_cols)
             {
                 count.local().at<acc_t>(candidate.y, candidate.x)++;
@@ -381,7 +404,7 @@ void compute_R_table(const cv::Mat &img, const std::vector< cv::Point > &rotated
 // rotated_corners are the corners of a polygon containing the meaningful part of the gradient magnitude
 // centroid will contain the computed centroid
 // pixel_on_edge will contain the collection of pixel coordinates that belong to edges
-void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge, cv::Mat& mag_bin, const std::string &idx)
+void compute_edges(const std::vector< cv::Point > &rotated_corners, const cv::Mat &gradient_norm, cv::Point &centroid, std::vector<cv::Point> &pixel_on_edge, cv::Mat &mag_bin, const std::string &idx)
 {
     pixel_on_edge.clear();
 
@@ -640,15 +663,17 @@ double norm( const cv::Point &p )
 
 void save_model_stats(const R_table_t &rt)
 {
-   const size_t rt_sz = rt.size();
+    const size_t rt_sz = rt.size();
 
-   size_t n_super_m = 0;
-   for ( size_t i = 0; i < rt_sz; i++ ) {
-      const size_t current_angle_sz = rt[i].size();
-      for ( size_t j = 0; j < current_angle_sz; j++ ) {
-         n_super_m++;
-      }
-   }
+    size_t n_super_m = 0;
+    for ( size_t i = 0; i < rt_sz; i++ )
+    {
+        const size_t current_angle_sz = rt[i].size();
+        for ( size_t j = 0; j < current_angle_sz; j++ )
+        {
+            n_super_m++;
+        }
+    }
 
     std::ofstream file("wf.csv");
     file << "Delta_phi,eta\n";
